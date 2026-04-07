@@ -13,6 +13,8 @@ data/*.csv
 data/*.h5
 !data/README.md
 data/Damage Propagation Modeling.pdf
+data/eda_correlation.png
+data/eda_lifecycle.png
 
 # Saved models (too large for git)
 models/*.pkl
