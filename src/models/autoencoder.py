@@ -157,7 +157,7 @@ class AutoencoderDetector:
         logger.info(f"Model saved to {path}")
 
     def load(self, path: str) -> "AutoencoderDetector":
-        checkpoint = torch.load(path, map_location=self.device)
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint["model_state"])
         self.threshold = checkpoint["threshold"]
         logger.info(f"Model loaded from {path}")
