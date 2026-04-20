@@ -32,3 +32,4 @@ models/*.pth
 # OS
 .DS_Store
 Thumbs.db
+data/model_comparison_pr.png
