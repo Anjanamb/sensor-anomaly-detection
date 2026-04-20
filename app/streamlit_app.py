@@ -3,14 +3,23 @@ Industrial Sensor Anomaly Detection Dashboard
 Main Streamlit application.
 """
 
+import os
+import sys
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from plotly.subplots import make_subplots
 
-# Page config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from src.data_loader import load_cmapss, add_rul_to_train, create_anomaly_labels, get_sensor_columns
+from src.preprocessing import remove_constant_sensors, normalize_global
+from src.feature_engineering import build_feature_pipeline
+from src.models import IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector
+from src.evaluation import evaluate_model
+
+# ── Page config (must be first Streamlit call) ──────────────────────────
 st.set_page_config(
     page_title="Sensor Anomaly Detection",
     page_icon="🔧",
@@ -18,77 +27,83 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom CSS
 st.markdown("""
 <style>
-    .metric-card {
-        background: linear-gradient(135deg, #1e1e2e, #2d2d44);
-        border-radius: 12px;
-        padding: 20px;
-        color: white;
-        text-align: center;
-    }
-    .metric-value { font-size: 2rem; font-weight: 700; }
-    .metric-label { font-size: 0.85rem; opacity: 0.7; }
     .stApp { background-color: #0e1117; }
 </style>
 """, unsafe_allow_html=True)
 
 
-def generate_demo_data(n_engines: int = 5, max_cycles: int = 200):
-    """Generate synthetic sensor data for demo purposes."""
-    np.random.seed(42)
-    records = []
+# ── Cached loaders ──────────────────────────────────────────────────────
 
-    for unit in range(1, n_engines + 1):
-        cycles = np.random.randint(150, max_cycles)
-        for cycle in range(1, cycles + 1):
-            # Degradation factor increases toward end of life
-            degradation = (cycle / cycles) ** 2
-            noise = np.random.normal(0, 0.05)
+@st.cache_data
+def load_and_process_data():
+    """Load C-MAPSS, add RUL/anomaly labels, engineer features."""
+    train_df, _test_df, _rul_df = load_cmapss('FD001')
+    train_df = add_rul_to_train(train_df)
+    train_df = create_anomaly_labels(train_df, threshold=30)
 
-            record = {
-                "unit_id": unit,
-                "cycle": cycle,
-                "max_cycle": cycles,
-                "rul": cycles - cycle,
-                "sensor_2": 642.5 + degradation * 10 + noise * 5,
-                "sensor_3": 1590 - degradation * 20 + noise * 10,
-                "sensor_4": 1408 + degradation * 15 + noise * 8,
-                "sensor_7": 554 + degradation * 5 + noise * 3,
-                "sensor_11": 47.5 + degradation * 2 + noise,
-                "sensor_12": 521 + degradation * 8 + noise * 4,
-                "sensor_15": 8.44 + degradation * 0.5 + noise * 0.2,
-                "sensor_20": 14.6 - degradation * 1 + noise * 0.5,
-                "sensor_21": 23.2 + degradation * 3 + noise * 1.5,
-            }
-            record["anomaly"] = 1 if record["rul"] <= 30 else 0
-            record["anomaly_score"] = degradation + abs(noise) * 0.3
-            records.append(record)
+    sensor_cols = get_sensor_columns(train_df)
+    train_df, kept_sensors = remove_constant_sensors(train_df, sensor_cols)
 
-    return pd.DataFrame(records)
+    featured_df = build_feature_pipeline(
+        train_df, kept_sensors,
+        rolling_windows=[5, 10], lags=[1, 5], ewma_spans=[5]
+    )
+    return featured_df, kept_sensors
 
+
+@st.cache_resource
+def load_models(input_dim):
+    """Load all three saved models from disk."""
+    models = {}
+
+    iso = IsolationForestDetector()
+    iso.load('models/isolation_forest.pkl')
+    models['Isolation Forest'] = iso
+
+    ae = AutoencoderDetector(input_dim=input_dim)
+    ae.load('models/autoencoder.pt')
+    models['Autoencoder'] = ae
+
+    svm = OneClassSVMDetector()
+    svm.load('models/one_class_svm.pkl')
+    models['One-Class SVM'] = svm
+
+    return models
+
+
+def get_feature_columns(df):
+    """Return all columns that are usable as model input features."""
+    exclude = {'unit_id', 'cycle', 'rul', 'anomaly'}
+    return [c for c in df.columns if c not in exclude]
+
+
+# ── Main ────────────────────────────────────────────────────────────────
 
 def main():
-    # Sidebar
+    # Load real data and models
+    data, kept_sensors = load_and_process_data()
+    feature_cols = get_feature_columns(data)
+    models = load_models(input_dim=len(feature_cols))
+
+    # ── Sidebar ─────────────────────────────────────────────────────────
     st.sidebar.title("🔧 Configuration")
 
-    # Model selection
     model_name = st.sidebar.selectbox(
         "Anomaly Detection Model",
         ["Isolation Forest", "Autoencoder", "One-Class SVM"],
     )
 
-    # Threshold slider
     threshold = st.sidebar.slider(
-        "Anomaly Threshold", 0.0, 1.0, 0.5, 0.05
+        "Anomaly Score Threshold", 0.0, 1.0, 0.5, 0.01
     )
 
-    # Engine selector
-    data = generate_demo_data()
     engine_ids = sorted(data["unit_id"].unique())
     selected_engine = st.sidebar.selectbox(
-        "Select Engine Unit", engine_ids, format_func=lambda x: f"Engine #{x}"
+        "Select Engine Unit",
+        engine_ids,
+        format_func=lambda x: f"Engine #{x}",
     )
 
     st.sidebar.markdown("---")
@@ -98,23 +113,39 @@ def main():
         "MSc AI & Data Science"
     )
 
-    # Main content
+    # ── Prepare engine data ─────────────────────────────────────────────
+    engine_data = data[data["unit_id"] == selected_engine].copy()
+    engine_data = engine_data.sort_values("cycle").reset_index(drop=True)
+
+    # Get feature matrix for this engine and handle NaNs
+    X_engine = engine_data[feature_cols].values
+    X_engine = np.nan_to_num(X_engine, 0)
+
+    # Run selected model
+    selected_model = models[model_name]
+    raw_scores = selected_model.score_samples(X_engine)
+
+    # Normalize scores to 0-1 range for the threshold slider
+    score_min, score_max = raw_scores.min(), raw_scores.max()
+    if score_max > score_min:
+        norm_scores = (raw_scores - score_min) / (score_max - score_min)
+    else:
+        norm_scores = np.zeros_like(raw_scores)
+
+    engine_data["anomaly_score"] = norm_scores
+    engine_data["predicted_anomaly"] = (norm_scores > threshold).astype(int)
+
+    # ── Header ──────────────────────────────────────────────────────────
     st.title("🔧 Industrial Sensor Anomaly Detection")
     st.markdown("Real-time monitoring and anomaly detection for turbofan engine sensors")
 
-    # Filter data
-    engine_data = data[data["unit_id"] == selected_engine].copy()
-    engine_data["predicted_anomaly"] = (
-        engine_data["anomaly_score"] > threshold
-    ).astype(int)
-
-    # KPI cards
+    # ── KPI cards ───────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
 
     total_cycles = len(engine_data)
-    anomaly_count = engine_data["predicted_anomaly"].sum()
+    anomaly_count = int(engine_data["predicted_anomaly"].sum())
     anomaly_rate = anomaly_count / total_cycles
-    current_rul = engine_data["rul"].iloc[-1]
+    current_rul = int(engine_data["rul"].iloc[-1])
 
     with col1:
         st.metric("Total Cycles", total_cycles)
@@ -126,19 +157,24 @@ def main():
         st.metric(
             "Est. RUL",
             f"{current_rul} cycles",
-            delta=f"{'⚠️ Critical' if current_rul < 30 else '✅ Healthy'}",
+            delta="⚠️ Critical" if current_rul < 30 else "✅ Healthy",
         )
 
     st.markdown("---")
 
-    # Sensor time-series with anomaly overlay
+    # ── Sensor time-series with anomaly overlay ─────────────────────────
     st.subheader(f"📈 Sensor Readings — Engine #{selected_engine}")
 
-    sensor_cols = [c for c in engine_data.columns if c.startswith("sensor_")]
+    # Only show raw sensor columns (not engineered features)
+    raw_sensor_cols = [c for c in engine_data.columns if c.startswith("sensor_")
+                       and "_roll_" not in c and "_lag_" not in c
+                       and "_diff_" not in c and "_ewma_" not in c
+                       and "_skew_" not in c and "_kurt_" not in c]
+
     selected_sensors = st.multiselect(
         "Select Sensors",
-        sensor_cols,
-        default=sensor_cols[:3],
+        raw_sensor_cols,
+        default=raw_sensor_cols[:3],
     )
 
     if selected_sensors:
@@ -153,7 +189,6 @@ def main():
         anomaly_mask = engine_data["predicted_anomaly"] == 1
 
         for i, sensor in enumerate(selected_sensors):
-            # Normal points
             fig.add_trace(
                 go.Scatter(
                     x=engine_data["cycle"],
@@ -163,11 +198,8 @@ def main():
                     line=dict(color="#4fc3f7", width=1.5),
                     showlegend=(i == 0),
                 ),
-                row=i + 1,
-                col=1,
+                row=i + 1, col=1,
             )
-
-            # Anomaly points
             fig.add_trace(
                 go.Scatter(
                     x=engine_data.loc[anomaly_mask, "cycle"],
@@ -177,8 +209,7 @@ def main():
                     marker=dict(color="#ef5350", size=4, symbol="x"),
                     showlegend=(i == 0),
                 ),
-                row=i + 1,
-                col=1,
+                row=i + 1, col=1,
             )
 
         fig.update_layout(
@@ -186,9 +217,9 @@ def main():
             template="plotly_dark",
             margin=dict(l=60, r=20, t=40, b=40),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
-    # Anomaly score over time
+    # ── Anomaly score timeline ──────────────────────────────────────────
     st.subheader("🎯 Anomaly Score Timeline")
 
     fig_score = go.Figure()
@@ -207,36 +238,48 @@ def main():
         y=threshold,
         line_dash="dash",
         line_color="#ef5350",
-        annotation_text=f"Threshold ({threshold})",
+        annotation_text=f"Threshold ({threshold:.2f})",
     )
     fig_score.update_layout(
         height=300,
         template="plotly_dark",
         xaxis_title="Cycle",
-        yaxis_title="Anomaly Score",
+        yaxis_title="Anomaly Score (normalized)",
         margin=dict(l=60, r=20, t=20, b=40),
     )
-    st.plotly_chart(fig_score, use_container_width=True)
+    st.plotly_chart(fig_score, width='stretch')
 
-    # Model comparison
+    # ── Model comparison across all engines ─────────────────────────────
     st.subheader("🏆 Model Comparison")
+    st.caption("Evaluated on all engine data with ground-truth anomaly labels (RUL ≤ 30)")
 
-    comparison_data = pd.DataFrame({
-        "Model": ["Isolation Forest", "Autoencoder", "One-Class SVM"],
-        "Precision": [0.87, 0.91, 0.83],
-        "Recall": [0.82, 0.88, 0.79],
-        "F1 Score": [0.84, 0.89, 0.81],
-        "AUC-PR": [0.90, 0.94, 0.86],
-    })
+    X_all = data[feature_cols].values
+    X_all = np.nan_to_num(X_all, 0)
+    y_all = data["anomaly"].values
+
+    comparison_rows = []
+    for name, model in models.items():
+        scores = model.score_samples(X_all)
+        preds = model.predict(X_all)
+        result = evaluate_model(name, y_all, preds, scores)
+        comparison_rows.append({
+            "Model": name,
+            "Precision": round(result.precision, 3),
+            "Recall": round(result.recall, 3),
+            "F1 Score": round(result.f1, 3),
+            "AUC-PR": round(result.auc_pr, 3),
+        })
+
+    comparison_df = pd.DataFrame(comparison_rows)
 
     fig_comp = go.Figure()
     for metric in ["Precision", "Recall", "F1 Score", "AUC-PR"]:
         fig_comp.add_trace(
             go.Bar(
                 name=metric,
-                x=comparison_data["Model"],
-                y=comparison_data[metric],
-                text=comparison_data[metric].round(2),
+                x=comparison_df["Model"],
+                y=comparison_df[metric],
+                text=comparison_df[metric],
                 textposition="outside",
             )
         )
@@ -247,7 +290,10 @@ def main():
         yaxis_range=[0, 1.05],
         margin=dict(l=60, r=20, t=20, b=40),
     )
-    st.plotly_chart(fig_comp, use_container_width=True)
+    st.plotly_chart(fig_comp, width='stretch')
+
+    # Show comparison table too
+    st.dataframe(comparison_df.set_index("Model"), width='stretch')
 
 
 if __name__ == "__main__":
