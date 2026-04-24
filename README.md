@@ -1,18 +1,187 @@
-# Dataset
+# 🔧 Industrial Sensor Anomaly Detection Dashboard
 
-## NASA C-MAPSS Turbofan Engine Degradation Simulation
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://sensor-anomaly-detection-aj.streamlit.app/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Download from the following link:
+An end-to-end machine learning pipeline for detecting anomalies in turbofan engine sensor data, with an interactive Streamlit dashboard for real-time monitoring and multi-model comparison.
 
-1. [**NASA Open Data**](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data) 
+> **[🚀 Live Demo](https://sensor-anomaly-detection-aj.streamlit.app/)**
 
-### Expected files in this directory:
-- train_FD001.txt, test_FD001.txt, RUL_FD001.txt
-- (Optional) FD002, FD003, FD004 variants
+<!-- Uncomment and replace with your actual screenshot:
+![Dashboard Screenshot](assets/dashboard_screenshot.png)
+-->
 
-### Dataset description:
-- FD001: 1 operating condition, 1 fault mode (100 engines) — start here
-- FD002–FD004: Increasing complexity
+---
 
-### References:
-- A. Saxena, K. Goebel, D. Simon, and N. Eklund, ‘Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation’, in the Proceedings of the 1st International Conference on Prognostics and Health Management (PHM08), Denver CO, Oct 2008.
+## Overview
+
+Predictive maintenance is critical in industrial settings where unexpected equipment failure leads to costly downtime. This project demonstrates a complete anomaly detection workflow — from raw sensor ingestion to an interactive monitoring dashboard — using the NASA C-MAPSS turbofan engine degradation dataset.
+
+The pipeline compares three fundamentally different anomaly detection approaches:
+
+| Model | Type | Approach |
+|-------|------|----------|
+| **Isolation Forest** | Tree-based | Isolates anomalies by recursive random partitioning |
+| **Autoencoder** | Neural network (PyTorch) | Learns to reconstruct normal patterns; high reconstruction error signals anomalies |
+| **One-Class SVM** | Kernel-based | Fits a decision boundary around normal data in high-dimensional feature space |
+
+---
+
+## Features
+
+- **300+ engineered time-series features** — rolling statistics, exponentially weighted moving averages, lag/diff features, skewness, and kurtosis computed per engine unit
+- **Three anomaly detection models** trained and compared on the same feature set
+- **Interactive Streamlit dashboard** with per-engine sensor visualisation, adjustable anomaly thresholds, anomaly score timelines, and a live model comparison chart
+- **Modular, testable codebase** — separate modules for data loading, preprocessing, feature engineering, models, and evaluation
+- **Dockerised** for reproducible deployment
+
+---
+
+## Project Structure
+
+```
+sensor-anomaly-detection/
+├── app/
+│   └── streamlit_app.py          # Interactive dashboard
+├── data/
+│   ├── README.md                 # Dataset download instructions
+│   ├── train_FD001.txt           # Training data (run-to-failure)
+│   ├── test_FD001.txt            # Test data
+│   └── RUL_FD001.txt             # Ground-truth RUL
+├── models/
+│   ├── isolation_forest.pkl      # Trained Isolation Forest
+│   ├── autoencoder.pt            # Trained Autoencoder weights
+│   └── one_class_svm.pkl         # Trained One-Class SVM
+├── notebooks/
+│   ├── 01_eda.ipynb              # Exploratory data analysis
+│   ├── 02_feature_engineering.ipynb
+│   └── 03_model_comparison.ipynb # Training, evaluation, PR curves
+├── src/
+│   ├── data_loader.py            # C-MAPSS ingestion & RUL labelling
+│   ├── preprocessing.py          # Normalisation, splitting, cleaning
+│   ├── feature_engineering.py    # Rolling, lag, EWMA, statistical features
+│   ├── evaluation.py             # Precision, Recall, F1, AUC-PR, AUC-ROC
+│   └── models/
+│       ├── isolation_forest.py
+│       ├── autoencoder.py
+│       └── one_class_svm.py
+├── tests/
+│   ├── test_preprocessing.py
+│   ├── test_features.py
+│   └── test_models.py
+├── Dockerfile
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Quick Start
+
+### 1. Clone and set up
+
+```bash
+git clone https://github.com/Anjanamb/sensor-anomaly-detection.git
+cd sensor-anomaly-detection
+
+python -m venv venv
+source venv/bin/activate      # Linux/Mac
+# venv\Scripts\activate       # Windows
+
+pip install -r requirements.txt
+```
+
+### 2. Explore the notebooks
+
+```bash
+jupyter notebook notebooks/
+```
+
+Run in order: `01_eda.ipynb` → `02_feature_engineering.ipynb` → `03_model_comparison.ipynb`
+
+### 3. Launch the dashboard
+
+```bash
+streamlit run app/streamlit_app.py
+```
+
+### 4. Run tests
+
+```bash
+pytest tests/ -v
+```
+
+---
+
+## Dataset
+
+**NASA C-MAPSS Turbofan Engine Degradation Simulation**
+
+Run-to-failure sensor recordings from 100 turbofan engines (FD001 subset), each with 21 sensor channels and 3 operational settings. Engines operate normally at first, then develop faults that progress until failure.
+
+- **Source:** [NASA Open Data](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data)
+- **Reference:** A. Saxena, K. Goebel, D. Simon, and N. Eklund, "Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation", PHM08, Denver CO, 2008.
+
+---
+
+## Approach
+
+### Preprocessing
+
+- Removed 6 constant-variance sensors (no degradation signal)
+- Normalised readings globally with StandardScaler
+- Split data by engine unit (not by row) to prevent data leakage
+
+### Feature Engineering
+
+From 15 active sensors, generated 180+ features per time step:
+
+- **Rolling statistics** (mean, std) at windows of 5, 10, and 20 cycles
+- **Lag and difference features** capturing rate-of-change at 1 and 5 cycle offsets
+- **Exponentially weighted moving averages** (spans of 5 and 15) for trend detection
+- **Higher-order statistics** (skewness, kurtosis) over 20-cycle windows to detect distributional shifts
+- **Normalised cycle position** (0→1) representing lifecycle progress
+
+### Anomaly Labelling
+
+Binary labels derived from Remaining Useful Life: samples with RUL ≤ 30 cycles are labelled as anomalous (~15% of the dataset), reflecting the degradation zone approaching failure.
+
+---
+
+## Tech Stack
+
+| Category | Tools |
+|----------|-------|
+| **ML / Data** | Python, PyTorch, scikit-learn, pandas, NumPy, SciPy |
+| **Visualisation** | Plotly, Matplotlib, Seaborn |
+| **Dashboard** | Streamlit |
+| **Testing** | pytest |
+| **Deployment** | Docker, Streamlit Cloud |
+
+---
+
+## Docker
+
+```bash
+docker build -t sensor-anomaly .
+docker run -p 8501:8501 sensor-anomaly
+```
+
+Then open `http://localhost:8501`.
+
+---
+
+## Author
+
+**Anjana Bandara**
+MSc Artificial Intelligence & Data Science — Heinrich Heine University Düsseldorf
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-anjana--b--blue?logo=linkedin)](https://linkedin.com/in/anjana-b-)
+[![GitHub](https://img.shields.io/badge/GitHub-Anjanamb-181717?logo=github)](https://github.com/Anjanamb)
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
