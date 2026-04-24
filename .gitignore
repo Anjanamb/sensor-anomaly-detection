@@ -8,18 +8,20 @@ venv/
 .env
 
 # Data (too large for git)
-data/*.txt
-data/*.csv
-data/*.h5
+# data/*.txt
+# data/*.csv
+# data/*.h5
 !data/README.md
 data/Damage Propagation Modeling.pdf
 data/eda_correlation.png
 data/eda_lifecycle.png
+data/model_comparison_pr.png
+data/readme.txt
 
 # Saved models (too large for git)
-models/*.pkl
-models/*.pt
-models/*.pth
+# models/*.pkl
+# models/*.pt
+# models/*.pth
 
 # Jupyter
 .ipynb_checkpoints/
@@ -32,4 +34,3 @@ models/*.pth
 # OS
 .DS_Store
 Thumbs.db
-data/model_comparison_pr.png
