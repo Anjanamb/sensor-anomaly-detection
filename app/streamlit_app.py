@@ -19,7 +19,7 @@ from src.feature_engineering import build_feature_pipeline
 from src.models import IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector
 from src.evaluation import evaluate_model
 
-# ── Page config (must be first Streamlit call) ──────────────────────────
+# ── Page config ─────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Sensor Anomaly Detection",
     page_icon="🔧",
@@ -54,7 +54,7 @@ def load_and_process_data():
 
 
 @st.cache_resource
-def load_models(input_dim):
+def load_models(all_feature_dim, raw_sensor_dim):
     """Load all three saved models from disk."""
     models = {}
 
@@ -62,7 +62,7 @@ def load_models(input_dim):
     iso.load('models/isolation_forest.pkl')
     models['Isolation Forest'] = iso
 
-    ae = AutoencoderDetector(input_dim=input_dim)
+    ae = AutoencoderDetector(input_dim=raw_sensor_dim)
     ae.load('models/autoencoder.pt')
     models['Autoencoder'] = ae
 
@@ -73,10 +73,24 @@ def load_models(input_dim):
     return models
 
 
-def get_feature_columns(df):
-    """Return all columns that are usable as model input features."""
+def get_all_feature_columns(df):
+    """Return all engineered + raw feature columns (for IF and SVM)."""
     exclude = {'unit_id', 'cycle', 'rul', 'anomaly'}
     return [c for c in df.columns if c not in exclude]
+
+
+def get_raw_sensor_columns(df, kept_sensors):
+    """Return raw sensor column names only (for Autoencoder)."""
+    return list(kept_sensors)
+
+
+def get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_cols):
+    """Return the right feature matrix for each model type."""
+    if model_name == "Autoencoder":
+        X = engine_data[raw_sensor_cols].values
+    else:
+        X = engine_data[all_feature_cols].values
+    return np.nan_to_num(X, 0)
 
 
 # ── Main ────────────────────────────────────────────────────────────────
@@ -84,8 +98,12 @@ def get_feature_columns(df):
 def main():
     # Load real data and models
     data, kept_sensors = load_and_process_data()
-    feature_cols = get_feature_columns(data)
-    models = load_models(input_dim=len(feature_cols))
+    all_feature_cols = get_all_feature_columns(data)
+    raw_sensor_cols = get_raw_sensor_columns(data, kept_sensors)
+    models = load_models(
+        all_feature_dim=len(all_feature_cols),
+        raw_sensor_dim=len(raw_sensor_cols)
+    )
 
     # ── Sidebar ─────────────────────────────────────────────────────────
     st.sidebar.title("🔧 Configuration")
@@ -117,9 +135,8 @@ def main():
     engine_data = data[data["unit_id"] == selected_engine].copy()
     engine_data = engine_data.sort_values("cycle").reset_index(drop=True)
 
-    # Get feature matrix for this engine and handle NaNs
-    X_engine = engine_data[feature_cols].values
-    X_engine = np.nan_to_num(X_engine, 0)
+    # Get correct feature matrix for selected model
+    X_engine = get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_cols)
 
     # Run selected model
     selected_model = models[model_name]
@@ -165,16 +182,16 @@ def main():
     # ── Sensor time-series with anomaly overlay ─────────────────────────
     st.subheader(f"📈 Sensor Readings — Engine #{selected_engine}")
 
-    # Only show raw sensor columns (not engineered features)
-    raw_sensor_cols = [c for c in engine_data.columns if c.startswith("sensor_")
-                       and "_roll_" not in c and "_lag_" not in c
-                       and "_diff_" not in c and "_ewma_" not in c
-                       and "_skew_" not in c and "_kurt_" not in c]
+    # Only show raw sensor columns
+    display_sensor_cols = [c for c in engine_data.columns if c.startswith("sensor_")
+                           and "_roll_" not in c and "_lag_" not in c
+                           and "_diff_" not in c and "_ewma_" not in c
+                           and "_skew_" not in c and "_kurt_" not in c]
 
     selected_sensors = st.multiselect(
         "Select Sensors",
-        raw_sensor_cols,
-        default=raw_sensor_cols[:3],
+        display_sensor_cols,
+        default=display_sensor_cols[:3],
     )
 
     if selected_sensors:
@@ -249,18 +266,21 @@ def main():
     )
     st.plotly_chart(fig_score, width='stretch')
 
-    # ── Model comparison across all engines ─────────────────────────────
+    # ── Model comparison ────────────────────────────────────────────────
     st.subheader("🏆 Model Comparison")
     st.caption("Evaluated on all engine data with ground-truth anomaly labels (RUL ≤ 30)")
 
-    X_all = data[feature_cols].values
-    X_all = np.nan_to_num(X_all, 0)
+    X_all = np.nan_to_num(data[all_feature_cols].values, 0)
+    X_all_raw = np.nan_to_num(data[raw_sensor_cols].values, 0)
     y_all = data["anomaly"].values
 
     comparison_rows = []
     for name, model in models.items():
-        scores = model.score_samples(X_all)
-        preds = model.predict(X_all)
+        if name == "Autoencoder":
+            scores = model.score_samples(X_all_raw)
+        else:
+            scores = model.score_samples(X_all)
+        preds = model.predict(X_all_raw if name == "Autoencoder" else X_all)
         result = evaluate_model(name, y_all, preds, scores)
         comparison_rows.append({
             "Model": name,
@@ -292,7 +312,6 @@ def main():
     )
     st.plotly_chart(fig_comp, width='stretch')
 
-    # Show comparison table too
     st.dataframe(comparison_df.set_index("Model"), width='stretch')
 
 
