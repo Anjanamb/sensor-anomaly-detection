@@ -4,6 +4,9 @@ Focuses on metrics suitable for imbalanced data.
 """
 
 import logging
+import warnings
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+
 from dataclasses import dataclass
 
 import numpy as np
