@@ -17,6 +17,8 @@ data/eda_correlation.png
 data/eda_lifecycle.png
 data/model_comparison_pr.png
 data/readme.txt
+data/confusion_matrices.png
+
 
 # Saved models (too large for git)
 # models/*.pkl
