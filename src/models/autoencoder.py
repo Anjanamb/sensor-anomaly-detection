@@ -107,7 +107,7 @@ class AutoencoderDetector:
             self.model.parameters(), lr=self.lr, weight_decay=1e-5
         )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', patience=10, factor=0.5, verbose=False
+            optimizer, mode='min', patience=10, factor=0.5
         )
         criterion = nn.MSELoss()
 
