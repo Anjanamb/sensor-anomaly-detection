@@ -18,32 +18,39 @@ class SensorAutoencoder(nn.Module):
     """
     Symmetric autoencoder for sensor data.
     Bottleneck forces compression → anomalies produce high reconstruction error.
+    
+    Architecture auto-scales based on input_dim:
+    - For raw sensors (~15 features): tight bottleneck for strong compression
+    - For engineered features (~180+): wider layers to handle dimensionality
     """
 
-    def __init__(self, input_dim: int, encoding_dim: int = 16):
+    def __init__(self, input_dim: int, encoding_dim: int = 8):
         super().__init__()
 
+        # Scale hidden layers based on input size
+        h1 = max(32, input_dim * 2)
+        h2 = max(16, input_dim)
+
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
+            nn.Linear(input_dim, h1),
+            nn.BatchNorm1d(h1),
+            nn.LeakyReLU(0.1),
             nn.Dropout(0.2),
-            nn.Linear(64, 32),
-            nn.BatchNorm1d(32),
-            nn.ReLU(),
-            nn.Linear(32, encoding_dim),
-            nn.ReLU(),
+            nn.Linear(h1, h2),
+            nn.BatchNorm1d(h2),
+            nn.LeakyReLU(0.1),
+            nn.Linear(h2, encoding_dim),
         )
 
         self.decoder = nn.Sequential(
-            nn.Linear(encoding_dim, 32),
-            nn.BatchNorm1d(32),
-            nn.ReLU(),
-            nn.Linear(32, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(),
+            nn.Linear(encoding_dim, h2),
+            nn.BatchNorm1d(h2),
+            nn.LeakyReLU(0.1),
+            nn.Linear(h2, h1),
+            nn.BatchNorm1d(h1),
+            nn.LeakyReLU(0.1),
             nn.Dropout(0.2),
-            nn.Linear(64, input_dim),
+            nn.Linear(h1, input_dim),
         )
 
     def forward(self, x):
@@ -60,7 +67,7 @@ class AutoencoderDetector:
     def __init__(
         self,
         input_dim: int,
-        encoding_dim: int = 16,
+        encoding_dim: int = 8,
         lr: float = 1e-3,
         epochs: int = 50,
         batch_size: int = 256,
@@ -70,6 +77,8 @@ class AutoencoderDetector:
         self.device = device or (
             "cuda" if torch.cuda.is_available() else "cpu"
         )
+        self.input_dim = input_dim
+        self.encoding_dim = encoding_dim
         self.model = SensorAutoencoder(input_dim, encoding_dim).to(
             self.device
         )
@@ -83,8 +92,8 @@ class AutoencoderDetector:
     def fit(self, X: np.ndarray) -> "AutoencoderDetector":
         """Train on healthy data."""
         logger.info(
-            f"Training Autoencoder on {X.shape[0]} samples, "
-            f"device={self.device}"
+            f"Training Autoencoder on {X.shape[0]} samples "
+            f"({X.shape[1]} features), device={self.device}"
         )
 
         dataset = TensorDataset(
@@ -94,7 +103,12 @@ class AutoencoderDetector:
             dataset, batch_size=self.batch_size, shuffle=True
         )
 
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.lr, weight_decay=1e-5
+        )
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', patience=10, factor=0.5, verbose=False
+        )
         criterion = nn.MSELoss()
 
         self.model.train()
@@ -110,6 +124,7 @@ class AutoencoderDetector:
 
             avg_loss = epoch_loss / len(dataset)
             self.train_losses.append(avg_loss)
+            scheduler.step(avg_loss)
 
             if (epoch + 1) % 10 == 0:
                 logger.info(f"  Epoch {epoch+1}/{self.epochs}, Loss: {avg_loss:.6f}")
@@ -151,6 +166,8 @@ class AutoencoderDetector:
             {
                 "model_state": self.model.state_dict(),
                 "threshold": self.threshold,
+                "input_dim": self.input_dim,
+                "encoding_dim": self.encoding_dim,
             },
             path,
         )
@@ -158,6 +175,13 @@ class AutoencoderDetector:
 
     def load(self, path: str) -> "AutoencoderDetector":
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
+        # Rebuild model if dimensions are stored
+        if "input_dim" in checkpoint:
+            self.input_dim = checkpoint["input_dim"]
+            self.encoding_dim = checkpoint["encoding_dim"]
+            self.model = SensorAutoencoder(
+                self.input_dim, self.encoding_dim
+            ).to(self.device)
         self.model.load_state_dict(checkpoint["model_state"])
         self.threshold = checkpoint["threshold"]
         logger.info(f"Model loaded from {path}")
