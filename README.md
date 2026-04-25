@@ -8,7 +8,7 @@ An end-to-end machine learning pipeline for detecting anomalies in turbofan engi
 
 > **[🚀 Live Demo](https://sensor-anomaly-detection-aj.streamlit.app/)**
 
-<!-- Uncomment and replace with your actual screenshot:
+<!-- Uncomment and update path once you add a screenshot:
 ![Dashboard Screenshot](assets/dashboard_screenshot.png)
 -->
 
@@ -18,20 +18,32 @@ An end-to-end machine learning pipeline for detecting anomalies in turbofan engi
 
 Predictive maintenance is critical in industrial settings where unexpected equipment failure leads to costly downtime. This project demonstrates a complete anomaly detection workflow — from raw sensor ingestion to an interactive monitoring dashboard — using the NASA C-MAPSS turbofan engine degradation dataset.
 
-The pipeline compares three fundamentally different anomaly detection approaches:
+The pipeline compares three fundamentally different anomaly detection approaches, all trained exclusively on healthy engine data so they learn what "normal" looks like and flag deviations:
 
 | Model | Type | Approach |
 |-------|------|----------|
 | **Isolation Forest** | Tree-based | Isolates anomalies by recursive random partitioning |
-| **Autoencoder** | Neural network (PyTorch) | Learns to reconstruct normal patterns; high reconstruction error signals anomalies |
+| **Autoencoder** | Neural network (PyTorch) | Learns to reconstruct normal sensor patterns; high reconstruction error signals anomalies |
 | **One-Class SVM** | Kernel-based | Fits a decision boundary around normal data in high-dimensional feature space |
+
+### Results
+
+Evaluated on a held-out set of 20 engine units (4,291 samples, 14.4% anomalous):
+
+| Model | Precision | Recall | F1 | AUC-PR | AUC-ROC |
+|-------|-----------|--------|-----|--------|---------|
+| **Isolation Forest** | **0.734** | **0.826** | **0.777** | **0.701** | **0.957** |
+| One-Class SVM | 0.609 | 0.773 | 0.681 | 0.650 | 0.926 |
+| Autoencoder | 0.362 | 0.485 | 0.415 | 0.384 | 0.766 |
+
+Isolation Forest achieves the best overall performance. The Autoencoder, trained on raw sensor readings (15 features) rather than the full engineered feature set (184 features), captures nonlinear patterns but is limited by its feedforward architecture — a sequence-based LSTM autoencoder would be a natural next step.
 
 ---
 
 ## Features
 
 - **300+ engineered time-series features** — rolling statistics, exponentially weighted moving averages, lag/diff features, skewness, and kurtosis computed per engine unit
-- **Three anomaly detection models** trained and compared on the same feature set
+- **Three anomaly detection models** trained on healthy data only, with optimal thresholds selected via PR curve analysis
 - **Interactive Streamlit dashboard** with per-engine sensor visualisation, adjustable anomaly thresholds, anomaly score timelines, and a live model comparison chart
 - **Modular, testable codebase** — separate modules for data loading, preprocessing, feature engineering, models, and evaluation
 - **Dockerised** for reproducible deployment
@@ -132,16 +144,23 @@ Run-to-failure sensor recordings from 100 turbofan engines (FD001 subset), each 
 - Removed 6 constant-variance sensors (no degradation signal)
 - Normalised readings globally with StandardScaler
 - Split data by engine unit (not by row) to prevent data leakage
+- Trained models on **healthy data only** (RUL > 30) so they learn what "normal" looks like
 
 ### Feature Engineering
 
 From 15 active sensors, generated 180+ features per time step:
 
-- **Rolling statistics** (mean, std) at windows of 5, 10, and 20 cycles
+- **Rolling statistics** (mean, std) at windows of 5 and 10 cycles
 - **Lag and difference features** capturing rate-of-change at 1 and 5 cycle offsets
-- **Exponentially weighted moving averages** (spans of 5 and 15) for trend detection
+- **Exponentially weighted moving averages** (span of 5) for trend detection
 - **Higher-order statistics** (skewness, kurtosis) over 20-cycle windows to detect distributional shifts
 - **Normalised cycle position** (0→1) representing lifecycle progress
+
+### Model Design Choices
+
+- **Isolation Forest & One-Class SVM** use all 184 engineered features — tree and kernel methods handle correlated features well
+- **Autoencoder** uses 15 raw sensor columns only — neural networks struggle with redundant engineered features, so raw sensors give a cleaner learning signal
+- **Thresholds** optimised via Precision-Recall curve analysis (maximising F1) rather than default model thresholds
 
 ### Anomaly Labelling
 
@@ -177,7 +196,7 @@ Then open `http://localhost:8501`.
 **Anjana Bandara**
 MSc Artificial Intelligence & Data Science — Heinrich Heine University Düsseldorf
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-anjana--b--blue?logo=linkedin)](https://linkedin.com/in/anjana-b-)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-anjana--b-blue?logo=linkedin)](https://linkedin.com/in/anjana-b-)
 [![GitHub](https://img.shields.io/badge/GitHub-Anjanamb-181717?logo=github)](https://github.com/Anjanamb)
 
 ---
