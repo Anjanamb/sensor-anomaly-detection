@@ -18,6 +18,7 @@ from src.preprocessing import remove_constant_sensors, normalize_global
 from src.feature_engineering import build_feature_pipeline
 from src.models import IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector
 from src.evaluation import evaluate_model
+from src.explainability import build_explainer, explain, top_features_for_sample
 
 # ── Page config ─────────────────────────────────────────────────────────
 st.set_page_config(
@@ -71,6 +72,12 @@ def load_models(all_feature_dim, raw_sensor_dim):
     models['One-Class SVM'] = svm
 
     return models
+
+
+@st.cache_resource
+def load_if_explainer(_iso_detector, background_matrix):
+    """Build the TreeExplainer once per session for the Isolation Forest."""
+    return build_explainer(_iso_detector, background_matrix, max_background=200)
 
 
 def get_all_feature_columns(df):
@@ -313,6 +320,108 @@ def main():
     st.plotly_chart(fig_comp, width='stretch')
 
     st.dataframe(comparison_df.set_index("Model"), width='stretch')
+
+    # ── Explainability (Isolation Forest) ───────────────────────────────
+    st.markdown("---")
+    st.subheader("🔍 Why was this flagged? — Isolation Forest SHAP")
+    st.caption(
+        "SHAP values attribute the Isolation Forest's anomaly score back to "
+        "individual engineered features. Positive bars push a sample towards "
+        "anomalous; values are aggregated across the cycles of the selected "
+        "engine. Available for Isolation Forest only — multi-model SHAP is "
+        "planned as future work."
+    )
+
+    if st.toggle("Compute SHAP for this engine", value=False):
+        healthy_mask = data["anomaly"] == 0
+        background = np.nan_to_num(
+            data.loc[healthy_mask, all_feature_cols].values, 0
+        )
+        X_engine_all = np.nan_to_num(
+            engine_data[all_feature_cols].values, 0
+        )
+
+        with st.spinner("Computing SHAP values…"):
+            iso_detector = models["Isolation Forest"]
+            explainer = load_if_explainer(iso_detector, background)
+            explanation = explain(
+                iso_detector,
+                X_engine_all,
+                all_feature_cols,
+                explainer=explainer,
+            )
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown("**Top base sensors by total |SHAP|**")
+            sensor_top = explanation.per_sensor.head(10)
+            fig_sensor = go.Figure(
+                go.Bar(
+                    x=sensor_top["total_abs_shap"][::-1],
+                    y=sensor_top["base_sensor"][::-1],
+                    orientation="h",
+                    marker_color="#4fc3f7",
+                )
+            )
+            fig_sensor.update_layout(
+                height=320,
+                template="plotly_dark",
+                margin=dict(l=80, r=20, t=20, b=40),
+                xaxis_title="Σ |SHAP|",
+            )
+            st.plotly_chart(fig_sensor, width='stretch')
+
+        with col_b:
+            st.markdown("**Contribution by feature family**")
+            fam = explanation.per_family
+            fig_fam = go.Figure(
+                go.Bar(
+                    x=fam["total_abs_shap"],
+                    y=fam["family"],
+                    orientation="h",
+                    marker_color="#ab47bc",
+                )
+            )
+            fig_fam.update_layout(
+                height=320,
+                template="plotly_dark",
+                margin=dict(l=80, r=20, t=20, b=40),
+                xaxis_title="Σ |SHAP|",
+            )
+            st.plotly_chart(fig_fam, width='stretch')
+
+        # Per-cycle drill-down
+        st.markdown("**Per-cycle drill-down**")
+        cycle_choice = st.slider(
+            "Cycle",
+            min_value=int(engine_data["cycle"].min()),
+            max_value=int(engine_data["cycle"].max()),
+            value=int(engine_data["cycle"].iloc[-1]),
+        )
+        sample_idx = int(
+            (engine_data["cycle"] == cycle_choice).idxmax()
+            - engine_data.index[0]
+        )
+        top_k = top_features_for_sample(explanation, sample_idx, k=10)
+        colors = [
+            "#ef5350" if v > 0 else "#66bb6a" for v in top_k["shap_value"]
+        ]
+        fig_sample = go.Figure(
+            go.Bar(
+                x=top_k["shap_value"],
+                y=top_k["feature"],
+                orientation="h",
+                marker_color=colors,
+            )
+        )
+        fig_sample.update_layout(
+            height=380,
+            template="plotly_dark",
+            margin=dict(l=200, r=20, t=20, b=40),
+            xaxis_title="SHAP value (→ anomaly)",
+        )
+        st.plotly_chart(fig_sample, width='stretch')
 
 
 if __name__ == "__main__":

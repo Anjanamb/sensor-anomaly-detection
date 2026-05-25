@@ -107,14 +107,30 @@ Input (15) → Dense(32) → BN → LeakyReLU → Dropout(0.2)
 
 Rather than using each model's default decision boundary, thresholds are optimised by finding the point on the Precision-Recall curve that maximises the F1 score. This is important for imbalanced data (only ~15% anomalous) where accuracy would be misleading.
 
+### Explainability (SHAP)
+
+When the dashboard flags a cycle as anomalous, the next question is always *why*. The pipeline answers this for the Isolation Forest using SHAP (Shapley Additive Explanations), exposed as a dedicated panel in the Streamlit app.
+
+- **Explainer:** `shap.TreeExplainer` on the underlying scikit-learn `IsolationForest`. TreeExplainer computes exact Shapley values from the tree structure, so attributions are deterministic and fast — no Monte Carlo sampling.
+- **Input space:** the full set of engineered features (~184 columns). SHAP must explain the model that is actually deployed, so it scores the same feature space the detector was trained on — not the 21 raw sensor channels.
+- **Background sample:** ~200 rows drawn from healthy cycles (`anomaly == 0`). This sets the expected-value baseline so deviations are interpreted as *"how this point differs from healthy"*.
+- **Sign convention:** SHAP values are reported against the detector's anomaly score, so **positive bars push a sample towards anomalous** and negative bars pull it back towards healthy.
+- **Display aggregation:** raw 184-bar plots are unreadable. The panel therefore aggregates `|SHAP|` two ways:
+  - **Per base sensor** (e.g. all `sensor_4_*` columns rolled up) — answers *which sensor is misbehaving*.
+  - **Per feature family** (rolling-mean, rolling-std, EWMA, lag, diff, skew, kurt) — answers *what kind of anomaly* this is: a sudden jump (large `diff`), a distributional shift (large `skew`/`kurt`), or rising volatility (large rolling-`std`).
+- **Per-cycle drill-down:** a slider picks any cycle of the selected engine and shows the top-k signed SHAP contributors for just that cycle.
+
+**Scope.** SHAP attributions are model-specific — they explain the chosen detector, not the underlying data. Running SHAP on the One-Class SVM (`KernelExplainer`) and Autoencoder (`DeepExplainer`, on the 15 raw sensors) would yield distinct, complementary explanations. Multi-model SHAP comparison is tracked as future work; the current panel is intentionally limited to the best-performing detector (Isolation Forest, F1 0.777) to keep the deployed explanation coherent and fast.
+
 ---
 
 ## Features
 
 - **184 engineered time-series features** with rolling statistics, EWMA, lag/diff, skewness, and kurtosis
 - **Three anomaly detection models** trained on healthy data only, with PR-curve-optimised thresholds
+- **Per-prediction SHAP explanations** for the Isolation Forest, aggregated by base sensor and feature family
 - **Interactive Streamlit dashboard** with per-engine sensor visualisation, adjustable thresholds, anomaly score timelines, and live model comparison
-- **Modular, testable codebase** — separate modules for data loading, preprocessing, feature engineering, models, and evaluation
+- **Modular, testable codebase** — separate modules for data loading, preprocessing, feature engineering, models, evaluation, and explainability
 - **Dockerised** for reproducible deployment
 
 ---
@@ -143,6 +159,7 @@ sensor-anomaly-detection/
 │   ├── preprocessing.py          # Normalisation, splitting, cleaning
 │   ├── feature_engineering.py    # Rolling, lag, EWMA, statistical features
 │   ├── evaluation.py             # Precision, Recall, F1, AUC-PR, AUC-ROC
+│   ├── explainability.py         # SHAP attributions for Isolation Forest
 │   └── models/
 │       ├── isolation_forest.py
 │       ├── autoencoder.py        # PyTorch autoencoder with auto-scaling layers
@@ -150,7 +167,8 @@ sensor-anomaly-detection/
 ├── tests/
 │   ├── test_preprocessing.py
 │   ├── test_features.py
-│   └── test_models.py
+│   ├── test_models.py
+│   └── test_explainability.py
 ├── Dockerfile
 ├── requirements.txt
 └── README.md
@@ -201,6 +219,7 @@ pytest tests/ -v
 - **Single operating condition (FD001)** — the pipeline currently uses the simplest C-MAPSS subset. Extending to FD002–FD004 (multiple operating conditions, multiple fault modes) would test generalisation.
 - **Fixed anomaly threshold (RUL ≤ 30)** — the binary labelling is a simplification. A regression approach predicting RUL directly would provide more granular prognostics.
 - **No online learning** — models are trained offline. A production system would need incremental updates as new engine data arrives.
+- **Single-model SHAP** — explanations are currently produced only for the Isolation Forest. Adding `KernelExplainer` for the One-Class SVM and `DeepExplainer` for the Autoencoder would enable cross-model attribution comparison: agreement on both prediction *and* top features is a stronger anomaly signal than majority voting on labels alone.
 
 ---
 
