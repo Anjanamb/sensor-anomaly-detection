@@ -36,3 +36,7 @@ data/confusion_matrices.png
 # OS
 .DS_Store
 Thumbs.db
+
+# Local assistant context (not for sharing)
+CLAUDE.md
+.claude/
