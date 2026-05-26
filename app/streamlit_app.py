@@ -164,12 +164,11 @@ def main():
     st.markdown("Real-time monitoring and anomaly detection for turbofan engine sensors")
 
     # ── KPI cards ───────────────────────────────────────────────────────
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
 
     total_cycles = len(engine_data)
     anomaly_count = int(engine_data["predicted_anomaly"].sum())
     anomaly_rate = anomaly_count / total_cycles
-    current_rul = int(engine_data["rul"].iloc[-1])
 
     with col1:
         st.metric("Total Cycles", total_cycles)
@@ -177,12 +176,6 @@ def main():
         st.metric("Anomalies Detected", anomaly_count)
     with col3:
         st.metric("Anomaly Rate", f"{anomaly_rate:.1%}")
-    with col4:
-        st.metric(
-            "Est. RUL",
-            f"{current_rul} cycles",
-            delta="⚠️ Critical" if current_rul < 30 else "✅ Healthy",
-        )
 
     st.markdown("---")
 
