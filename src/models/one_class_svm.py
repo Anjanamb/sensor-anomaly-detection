@@ -3,6 +3,7 @@ One-Class SVM anomaly detection model.
 """
 
 import logging
+from typing import Optional
 
 import numpy as np
 from sklearn.svm import OneClassSVM
@@ -15,6 +16,11 @@ class OneClassSVMDetector:
     """
     One-Class SVM learns a boundary around normal data.
     Points outside the boundary are flagged as anomalies.
+
+    A custom ``threshold`` (e.g. F1-optimal from the PR curve) can be
+    attached after training; if set, ``predict()`` uses
+    ``score_samples > threshold`` instead of the kernel's ``nu`` cutoff.
+    The threshold is persisted by ``save()`` / ``load()``.
     """
 
     def __init__(
@@ -29,6 +35,7 @@ class OneClassSVMDetector:
             nu=nu,
         )
         self.is_fitted = False
+        self.threshold: Optional[float] = None
 
     def fit(self, X: np.ndarray) -> "OneClassSVMDetector":
         """
@@ -51,7 +58,13 @@ class OneClassSVMDetector:
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """Returns binary predictions: 1 = anomaly, 0 = normal."""
+        """Returns binary predictions: 1 = anomaly, 0 = normal.
+
+        Uses the stored F1-optimal ``threshold`` if set; otherwise falls
+        back to the kernel's nu-based decision boundary.
+        """
+        if self.threshold is not None:
+            return (self.score_samples(X) > self.threshold).astype(int)
         raw = self.model.predict(X)
         return (raw == -1).astype(int)
 
@@ -62,11 +75,19 @@ class OneClassSVMDetector:
         return -self.model.score_samples(X)
 
     def save(self, path: str) -> None:
-        joblib.dump(self.model, path)
+        joblib.dump(
+            {"model": self.model, "threshold": self.threshold}, path
+        )
         logger.info(f"Model saved to {path}")
 
     def load(self, path: str) -> "OneClassSVMDetector":
-        self.model = joblib.load(path)
+        artefact = joblib.load(path)
+        if isinstance(artefact, dict):
+            self.model = artefact["model"]
+            self.threshold = artefact.get("threshold")
+        else:
+            self.model = artefact
+            self.threshold = None
         self.is_fitted = True
         logger.info(f"Model loaded from {path}")
         return self

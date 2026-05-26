@@ -48,9 +48,9 @@ All three models are trained on *healthy* engine data only. They never see failu
 |-------|-----|---------|-----------|--------|
 | **Isolation Forest** | **0.777** | **0.957** | 0.734 | 0.826 |
 | One-Class SVM | 0.681 | 0.926 | 0.609 | 0.773 |
-| Autoencoder | 0.415 | 0.766 | 0.362 | 0.485 |
+| Autoencoder | 0.404 | 0.753 | 0.319 | 0.552 |
 
-*Evaluated on a held-out set of 20 engines (4,291 sensor readings, 14.4% labelled anomalous).*
+*Evaluated on a held-out set of 20 engines (4,291 sensor readings, 14.4% labelled anomalous). The Isolation Forest and One-Class SVM are deterministic (seeded); the Autoencoder is not seeded across PyTorch's BatchNorm/Dropout/Adam, so its numbers can shift by ±1–2 F1 points on a retrain.*
 
 **Reading the numbers:** F1 balances *precision* (when the model says "alarm", how often is it right?) and *recall* (of all the real problems, how many does it catch?). 0.777 means the Isolation Forest catches ~83% of degrading engines while only ~27% of its alarms are false. AUC-ROC of 0.957 means the model is very good at *ranking* — i.e. the worst engines almost always score higher than the healthy ones.
 

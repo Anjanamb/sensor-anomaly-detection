@@ -17,6 +17,11 @@ class IsolationForestDetector:
     Isolation Forest-based anomaly detector.
     Trained on healthy data (low contamination), detects anomalies
     as points that are easy to isolate.
+
+    A custom ``threshold`` (e.g. F1-optimal from the PR curve) can be
+    attached after training; if set, ``predict()`` uses
+    ``score_samples > threshold`` instead of sklearn's contamination
+    cutoff. The threshold is persisted by ``save()`` / ``load()``.
     """
 
     def __init__(
@@ -34,6 +39,7 @@ class IsolationForestDetector:
             n_jobs=-1,
         )
         self.is_fitted = False
+        self.threshold: Optional[float] = None
 
     def fit(self, X: np.ndarray) -> "IsolationForestDetector":
         """Fit on (ideally) healthy data."""
@@ -43,7 +49,13 @@ class IsolationForestDetector:
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        """Returns binary predictions: 1 = anomaly, 0 = normal."""
+        """Returns binary predictions: 1 = anomaly, 0 = normal.
+
+        Uses the stored F1-optimal ``threshold`` if set; otherwise falls
+        back to sklearn's contamination-based decision boundary.
+        """
+        if self.threshold is not None:
+            return (self.score_samples(X) > self.threshold).astype(int)
         raw = self.model.predict(X)
         # sklearn: -1 = anomaly, 1 = normal → convert to 1 = anomaly, 0 = normal
         return (raw == -1).astype(int)
@@ -56,11 +68,20 @@ class IsolationForestDetector:
         return -self.model.score_samples(X)
 
     def save(self, path: str) -> None:
-        joblib.dump(self.model, path)
+        joblib.dump(
+            {"model": self.model, "threshold": self.threshold}, path
+        )
         logger.info(f"Model saved to {path}")
 
     def load(self, path: str) -> "IsolationForestDetector":
-        self.model = joblib.load(path)
+        artefact = joblib.load(path)
+        if isinstance(artefact, dict):
+            self.model = artefact["model"]
+            self.threshold = artefact.get("threshold")
+        else:
+            # Back-compat: older saves stored the bare sklearn model
+            self.model = artefact
+            self.threshold = None
         self.is_fitted = True
         logger.info(f"Model loaded from {path}")
         return self

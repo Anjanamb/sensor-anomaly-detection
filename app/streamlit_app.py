@@ -5,6 +5,7 @@ Main Streamlit application.
 
 import os
 import sys
+import joblib
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -14,7 +15,7 @@ from plotly.subplots import make_subplots
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.data_loader import load_cmapss, add_rul_to_train, create_anomaly_labels, get_sensor_columns
-from src.preprocessing import remove_constant_sensors, normalize_global
+from src.preprocessing import remove_constant_sensors, train_test_split_by_unit
 from src.feature_engineering import build_feature_pipeline
 from src.models import IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector
 from src.evaluation import evaluate_model
@@ -75,6 +76,20 @@ def load_models(all_feature_dim, raw_sensor_dim):
 
 
 @st.cache_resource
+def load_scaler():
+    """Load the StandardScaler fit during training (saved by the notebook)."""
+    return joblib.load('models/scaler.pkl')
+
+
+@st.cache_data
+def apply_scaler(_scaler, df, feature_cols):
+    """Return a copy of df with `feature_cols` standardised by the saved scaler."""
+    out = df.copy()
+    out[feature_cols] = _scaler.transform(df[feature_cols])
+    return out
+
+
+@st.cache_resource
 def load_if_explainer(_iso_detector, background_matrix):
     """Build the TreeExplainer once per session for the Isolation Forest."""
     return build_explainer(_iso_detector, background_matrix, max_background=200)
@@ -97,7 +112,7 @@ def get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_col
         X = engine_data[raw_sensor_cols].values
     else:
         X = engine_data[all_feature_cols].values
-    return np.nan_to_num(X, 0)
+    return np.nan_to_num(X, nan=0.0)
 
 
 # ── Main ────────────────────────────────────────────────────────────────
@@ -111,6 +126,11 @@ def main():
         all_feature_dim=len(all_feature_cols),
         raw_sensor_dim=len(raw_sensor_cols)
     )
+    scaler = load_scaler()
+    # Scaled view: same rows as `data`, but feature_cols are standardised
+    # using the StandardScaler fit during training. Used for all model
+    # inputs. The original `data` stays untouched for display.
+    scaled_data = apply_scaler(scaler, data, all_feature_cols)
 
     # ── Sidebar ─────────────────────────────────────────────────────────
     st.sidebar.title("🔧 Configuration")
@@ -139,11 +159,16 @@ def main():
     )
 
     # ── Prepare engine data ─────────────────────────────────────────────
-    engine_data = data[data["unit_id"] == selected_engine].copy()
-    engine_data = engine_data.sort_values("cycle").reset_index(drop=True)
+    engine_mask = data["unit_id"] == selected_engine
+    engine_data = data[engine_mask].copy().sort_values("cycle").reset_index(drop=True)
+    scaled_engine_data = (
+        scaled_data[engine_mask].copy().sort_values("cycle").reset_index(drop=True)
+    )
 
-    # Get correct feature matrix for selected model
-    X_engine = get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_cols)
+    # Get correct feature matrix for selected model (always from scaled view)
+    X_engine = get_model_features(
+        model_name, scaled_engine_data, all_feature_cols, raw_sensor_cols
+    )
 
     # Run selected model
     selected_model = models[model_name]
@@ -268,20 +293,27 @@ def main():
 
     # ── Model comparison ────────────────────────────────────────────────
     st.subheader("🏆 Model Comparison")
-    st.caption("Evaluated on all engine data with ground-truth anomaly labels (RUL ≤ 30)")
+    st.caption(
+        "Evaluated on the held-out test split (20 engines, seed=42), "
+        "matching the training-notebook protocol that produced the README "
+        "metrics. Inputs are standardised with the saved StandardScaler; "
+        "each detector uses its F1-optimal threshold from training."
+    )
 
-    X_all = np.nan_to_num(data[all_feature_cols].values, 0)
-    X_all_raw = np.nan_to_num(data[raw_sensor_cols].values, 0)
-    y_all = data["anomaly"].values
+    # Same 80/20 unit-level split as the training notebook
+    _train_split, test_split = train_test_split_by_unit(
+        scaled_data, test_ratio=0.2, seed=42
+    )
+    X_test = np.nan_to_num(test_split[all_feature_cols].values, nan=0.0)
+    X_test_raw = np.nan_to_num(test_split[raw_sensor_cols].values, nan=0.0)
+    y_test = test_split["anomaly"].values
 
     comparison_rows = []
     for name, model in models.items():
-        if name == "Autoencoder":
-            scores = model.score_samples(X_all_raw)
-        else:
-            scores = model.score_samples(X_all)
-        preds = model.predict(X_all_raw if name == "Autoencoder" else X_all)
-        result = evaluate_model(name, y_all, preds, scores)
+        X_for_model = X_test_raw if name == "Autoencoder" else X_test
+        scores = model.score_samples(X_for_model)
+        preds = model.predict(X_for_model)
+        result = evaluate_model(name, y_test, preds, scores)
         comparison_rows.append({
             "Model": name,
             "Precision": round(result.precision, 3),
@@ -326,12 +358,14 @@ def main():
     )
 
     if st.toggle("Compute SHAP for this engine", value=False):
-        healthy_mask = data["anomaly"] == 0
+        # Background and explain set must both be in the model's training
+        # scale (StandardScaler-normalised), same as everywhere else.
+        healthy_mask = scaled_data["anomaly"] == 0
         background = np.nan_to_num(
-            data.loc[healthy_mask, all_feature_cols].values, 0
+            scaled_data.loc[healthy_mask, all_feature_cols].values, nan=0.0
         )
         X_engine_all = np.nan_to_num(
-            engine_data[all_feature_cols].values, 0
+            scaled_engine_data[all_feature_cols].values, nan=0.0
         )
 
         with st.spinner("Computing SHAP values…"):
