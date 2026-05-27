@@ -15,11 +15,16 @@ from plotly.subplots import make_subplots
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.data_loader import load_cmapss, add_rul_to_train, create_anomaly_labels, get_sensor_columns
-from src.preprocessing import remove_constant_sensors, train_test_split_by_unit
+from src.preprocessing import remove_constant_sensors, train_test_split_by_unit, create_sequences
 from src.feature_engineering import build_feature_pipeline
-from src.models import IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector
+from src.models import (
+    IsolationForestDetector, AutoencoderDetector,
+    OneClassSVMDetector, LSTMAutoencoderDetector,
+)
 from src.evaluation import evaluate_model
 from src.explainability import build_explainer, explain, top_features_for_sample
+
+LSTM_SEQ_LEN = 30
 
 # ── Page config ─────────────────────────────────────────────────────────
 st.set_page_config(
@@ -57,7 +62,7 @@ def load_and_process_data():
 
 @st.cache_resource
 def load_models(all_feature_dim, raw_sensor_dim):
-    """Load all three saved models from disk."""
+    """Load all four saved detectors from disk."""
     models = {}
 
     iso = IsolationForestDetector()
@@ -71,6 +76,12 @@ def load_models(all_feature_dim, raw_sensor_dim):
     svm = OneClassSVMDetector()
     svm.load('models/one_class_svm.pkl')
     models['One-Class SVM'] = svm
+
+    lstm = LSTMAutoencoderDetector(
+        n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
+    )
+    lstm.load('models/lstm_autoencoder.pt')
+    models['LSTM Autoencoder'] = lstm
 
     return models
 
@@ -110,6 +121,19 @@ def get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_col
     """Return the right feature matrix for each model type."""
     if model_name == "Autoencoder":
         X = engine_data[raw_sensor_cols].values
+    elif model_name == "LSTM Autoencoder":
+        # Build sliding windows of raw sensors per engine, length T = LSTM_SEQ_LEN.
+        # Returns shape (n_windows, T, n_sensors). Caller aligns scores to the
+        # last cycle of each window.
+        values = engine_data[raw_sensor_cols].values
+        n_cycles = values.shape[0]
+        if n_cycles < LSTM_SEQ_LEN:
+            return np.empty((0, LSTM_SEQ_LEN, len(raw_sensor_cols)))
+        windows = np.stack([
+            values[i - LSTM_SEQ_LEN : i]
+            for i in range(LSTM_SEQ_LEN, n_cycles + 1)
+        ])
+        return np.nan_to_num(windows, nan=0.0)
     else:
         X = engine_data[all_feature_cols].values
     return np.nan_to_num(X, nan=0.0)
@@ -137,7 +161,7 @@ def main():
 
     model_name = st.sidebar.selectbox(
         "Anomaly Detection Model",
-        ["Isolation Forest", "Autoencoder", "One-Class SVM"],
+        ["Isolation Forest", "Autoencoder", "One-Class SVM", "LSTM Autoencoder"],
     )
 
     threshold = st.sidebar.slider(
@@ -172,17 +196,36 @@ def main():
 
     # Run selected model
     selected_model = models[model_name]
-    raw_scores = selected_model.score_samples(X_engine)
 
-    # Normalize scores to 0-1 range for the threshold slider
-    score_min, score_max = raw_scores.min(), raw_scores.max()
-    if score_max > score_min:
-        norm_scores = (raw_scores - score_min) / (score_max - score_min)
+    # LSTM is windowed: one score per window, positioned at the last cycle.
+    # The first (LSTM_SEQ_LEN - 1) cycles have no score and are left as NaN.
+    if model_name == "LSTM Autoencoder":
+        n_cycles = len(engine_data)
+        per_cycle_scores = np.full(n_cycles, np.nan)
+        if X_engine.shape[0] > 0:
+            window_scores = selected_model.score_samples(X_engine)
+            # Score at cycle i = score of the window ending at cycle i (i ≥ T-1)
+            per_cycle_scores[LSTM_SEQ_LEN - 1 :] = window_scores
+        raw_scores = per_cycle_scores
+        finite = raw_scores[~np.isnan(raw_scores)]
+        if finite.size > 0 and finite.max() > finite.min():
+            norm_scores = (raw_scores - finite.min()) / (finite.max() - finite.min())
+        else:
+            norm_scores = np.zeros_like(raw_scores)
+        engine_data["anomaly_score"] = norm_scores
+        # NaN > threshold is False, so cold-start cycles never flag — correct.
+        engine_data["predicted_anomaly"] = (
+            (norm_scores > threshold) & ~np.isnan(norm_scores)
+        ).astype(int)
     else:
-        norm_scores = np.zeros_like(raw_scores)
-
-    engine_data["anomaly_score"] = norm_scores
-    engine_data["predicted_anomaly"] = (norm_scores > threshold).astype(int)
+        raw_scores = selected_model.score_samples(X_engine)
+        score_min, score_max = raw_scores.min(), raw_scores.max()
+        if score_max > score_min:
+            norm_scores = (raw_scores - score_min) / (score_max - score_min)
+        else:
+            norm_scores = np.zeros_like(raw_scores)
+        engine_data["anomaly_score"] = norm_scores
+        engine_data["predicted_anomaly"] = (norm_scores > threshold).astype(int)
 
     # ── Header ──────────────────────────────────────────────────────────
     st.title("🔧 Industrial Sensor Anomaly Detection")
@@ -308,12 +351,23 @@ def main():
     X_test_raw = np.nan_to_num(test_split[raw_sensor_cols].values, nan=0.0)
     y_test = test_split["anomaly"].values
 
+    # LSTM uses a windowed test population (slightly fewer samples — the
+    # first T-1 cycles of each engine drop out).
+    X_test_seq, y_test_seq = create_sequences(
+        test_split, raw_sensor_cols, sequence_length=LSTM_SEQ_LEN
+    )
+
     comparison_rows = []
     for name, model in models.items():
-        X_for_model = X_test_raw if name == "Autoencoder" else X_test
+        if name == "Autoencoder":
+            X_for_model, y_for_model = X_test_raw, y_test
+        elif name == "LSTM Autoencoder":
+            X_for_model, y_for_model = X_test_seq, y_test_seq
+        else:
+            X_for_model, y_for_model = X_test, y_test
         scores = model.score_samples(X_for_model)
         preds = model.predict(X_for_model)
-        result = evaluate_model(name, y_test, preds, scores)
+        result = evaluate_model(name, y_for_model, preds, scores)
         comparison_rows.append({
             "Model": name,
             "Precision": round(result.precision, 3),
