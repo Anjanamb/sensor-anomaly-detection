@@ -18,14 +18,24 @@ from src.data_loader import load_cmapss, add_rul_to_train, create_anomaly_labels
 from src.preprocessing import remove_constant_sensors, train_test_split_by_unit, create_sequences
 from src.feature_engineering import build_feature_pipeline
 from src.models import (
-    IsolationForestDetector, AutoencoderDetector,
-    OneClassSVMDetector, LSTMAutoencoderDetector,
+    IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector,
 )
 from src.evaluation import evaluate_model
 from src.explainability import (
     build_explainer, explain, top_features_for_sample,
     pretty_feature_label, feature_glossary, narrate,
 )
+
+# The LSTM detector pulls in extra torch surface (LSTM cells, weights_only
+# kwarg in newer torch.load) that has occasionally tripped Streamlit Cloud
+# wheels. Import it defensively so a missing-deps failure on the LSTM never
+# takes down the whole dashboard — the other three detectors stay usable.
+try:
+    from src.models import LSTMAutoencoderDetector
+    _LSTM_IMPORT_ERROR: str | None = None
+except Exception as _e:  # pragma: no cover - environment-dependent
+    LSTMAutoencoderDetector = None  # type: ignore[assignment,misc]
+    _LSTM_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
 LSTM_SEQ_LEN = 30
 
@@ -65,7 +75,7 @@ def load_and_process_data():
 
 @st.cache_resource
 def load_models(all_feature_dim, raw_sensor_dim):
-    """Load all four saved detectors from disk."""
+    """Load the saved detectors from disk. LSTM is best-effort."""
     models = {}
 
     iso = IsolationForestDetector()
@@ -80,11 +90,20 @@ def load_models(all_feature_dim, raw_sensor_dim):
     svm.load('models/one_class_svm.pkl')
     models['One-Class SVM'] = svm
 
-    lstm = LSTMAutoencoderDetector(
-        n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
-    )
-    lstm.load('models/lstm_autoencoder.pt')
-    models['LSTM Autoencoder'] = lstm
+    if LSTMAutoencoderDetector is not None:
+        try:
+            lstm = LSTMAutoencoderDetector(
+                n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
+            )
+            lstm.load('models/lstm_autoencoder.pt')
+            models['LSTM Autoencoder'] = lstm
+        except Exception as e:  # pragma: no cover - environment-dependent
+            # Surface the underlying error in the UI rather than crashing.
+            st.warning(
+                f"LSTM Autoencoder could not be loaded "
+                f"({type(e).__name__}: {e}). The other three detectors "
+                f"remain available."
+            )
 
     return models
 
@@ -162,10 +181,21 @@ def main():
     # ── Sidebar ─────────────────────────────────────────────────────────
     st.sidebar.title("🔧 Configuration")
 
+    # Only offer the detectors that actually loaded
+    available_models = [
+        name for name in (
+            "Isolation Forest", "Autoencoder", "One-Class SVM", "LSTM Autoencoder",
+        ) if name in models
+    ]
     model_name = st.sidebar.selectbox(
         "Anomaly Detection Model",
-        ["Isolation Forest", "Autoencoder", "One-Class SVM", "LSTM Autoencoder"],
+        available_models,
     )
+
+    if _LSTM_IMPORT_ERROR is not None:
+        st.sidebar.caption(
+            f"_LSTM unavailable on this deploy: {_LSTM_IMPORT_ERROR}_"
+        )
 
     threshold = st.sidebar.slider(
         "Anomaly Score Threshold", 0.0, 1.0, 0.5, 0.01
@@ -355,10 +385,14 @@ def main():
     y_test = test_split["anomaly"].values
 
     # LSTM uses a windowed test population (slightly fewer samples — the
-    # first T-1 cycles of each engine drop out).
-    X_test_seq, y_test_seq = create_sequences(
-        test_split, raw_sensor_cols, sequence_length=LSTM_SEQ_LEN
-    )
+    # first T-1 cycles of each engine drop out). Only build the windows
+    # when the LSTM actually loaded.
+    if "LSTM Autoencoder" in models:
+        X_test_seq, y_test_seq = create_sequences(
+            test_split, raw_sensor_cols, sequence_length=LSTM_SEQ_LEN
+        )
+    else:
+        X_test_seq = y_test_seq = None
 
     comparison_rows = []
     for name, model in models.items():
