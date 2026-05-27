@@ -21,10 +21,6 @@ from src.models import (
     IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector,
 )
 from src.evaluation import evaluate_model
-from src.explainability import (
-    build_explainer, explain, top_features_for_sample,
-    pretty_feature_label, feature_glossary, narrate,
-)
 
 # The LSTM detector pulls in extra torch surface (LSTM cells, weights_only
 # kwarg in newer torch.load) that has occasionally tripped Streamlit Cloud
@@ -36,6 +32,21 @@ try:
 except Exception as _e:  # pragma: no cover - environment-dependent
     LSTMAutoencoderDetector = None  # type: ignore[assignment,misc]
     _LSTM_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
+
+# The explainability layer imports `shap`, which drags in numba + llvmlite —
+# wheels that frequently fail to resolve on Streamlit Cloud's Python. Import
+# defensively so the SHAP panel becomes optional rather than fatal. None of
+# these symbols are needed outside the SHAP panel.
+try:
+    from src.explainability import (
+        build_explainer, explain, top_features_for_sample,
+        pretty_feature_label, feature_glossary, narrate,
+    )
+    _SHAP_IMPORT_ERROR: str | None = None
+except Exception as _e:  # pragma: no cover - environment-dependent
+    build_explainer = explain = top_features_for_sample = None  # type: ignore
+    pretty_feature_label = feature_glossary = narrate = None  # type: ignore
+    _SHAP_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
 LSTM_SEQ_LEN = 30
 
@@ -448,7 +459,14 @@ def main():
         "planned as future work."
     )
 
-    if st.toggle("Compute SHAP for this engine", value=False):
+    if _SHAP_IMPORT_ERROR is not None:
+        st.info(
+            "The SHAP panel is unavailable on this deploy because the `shap` "
+            "library failed to import "
+            f"({_SHAP_IMPORT_ERROR}). It runs locally — see "
+            "`notebooks/05_shap_narratives.ipynb` for the full walkthrough."
+        )
+    elif st.toggle("Compute SHAP for this engine", value=False):
         # Background and explain set must both be in the model's training
         # scale (StandardScaler-normalised), same as everywhere else.
         healthy_mask = scaled_data["anomaly"] == 0
