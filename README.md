@@ -205,7 +205,27 @@ flowchart LR
     B --> C4[other 181<br/>features<br/>0.20 total]
 ```
 
+#### Plain-English layer (the "what does this name mean?" problem)
+
+Raw SHAP feature names — `sensor_9_diff_5`, `sensor_14_roll_std_10` — are precise but unreadable to anyone outside the project. The dashboard layers three views on top of the same SHAP values:
+
+1. **Raw feature name** — what's actually in the model.
+2. **Pretty label** — a human-readable version via `pretty_feature_label()`.
+3. **One-sentence narrative** — a summary across the top contributors via `narrate()`.
+
+| Stage | Example for engine 5, final cycle |
+|---|---|
+| 1. Raw feature | `sensor_9_diff_5` — top SHAP value 0.31 |
+| 2. Pretty label | "Sensor 9 — change over 5 cycles" |
+| 3. Narrative | *"Flagged because **Sensor 14** is drifting from its baseline and **Sensor 9** is trending away from healthy recently."* |
+
+The model produces the same numbers at every stage; only the **presentation** changes. The dashboard surfaces all three: pretty labels on the per-cycle SHAP chart, the narrative as a banner above it, and a `feature_glossary()` table in a collapsible expander for users who want the full mapping. Walkthrough lives in [notebooks/05_shap_narratives.ipynb](notebooks/05_shap_narratives.ipynb).
+
+#### Scope and limitations
+
 SHAP attributions are **model-specific** — they explain the chosen detector, not the underlying data. Running SHAP on the One-Class SVM (`KernelExplainer`) and Autoencoder (`DeepExplainer`) would yield distinct, complementary stories — and *agreement* between models on both prediction *and* top features is a stronger anomaly signal than majority voting alone. That multi-model comparison is tracked as future work; the current panel covers the best-performing detector (Isolation Forest) to keep the deployed explanation coherent and fast.
+
+The narrative describes *what's pushing the model's score upward*, regardless of whether that score actually crossed the alarm threshold. It answers "what is the model paying attention to?" — not "is this an anomaly?". The threshold (and the Model Comparison panel) answer the latter.
 
 ---
 
@@ -225,7 +245,8 @@ sensor-anomaly-detection/
 │   ├── 01_eda.ipynb              # Walk through the data
 │   ├── 02_feature_engineering.ipynb
 │   ├── 03_model_comparison.ipynb # Training, evaluation, PR curves
-│   └── 04_lstm_temporal.ipynb    # LSTM permutation demo — "does the LSTM actually use time?"
+│   ├── 04_lstm_temporal.ipynb    # LSTM permutation demo — "does the LSTM actually use time?"
+│   └── 05_shap_narratives.ipynb  # SHAP plain-English layer — three-stage transform
 ├── src/
 │   ├── data_loader.py            # C-MAPSS ingestion & RUL labelling
 │   ├── preprocessing.py          # Normalisation, splitting, cleaning

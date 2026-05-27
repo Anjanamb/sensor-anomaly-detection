@@ -22,7 +22,10 @@ from src.models import (
     OneClassSVMDetector, LSTMAutoencoderDetector,
 )
 from src.evaluation import evaluate_model
-from src.explainability import build_explainer, explain, top_features_for_sample
+from src.explainability import (
+    build_explainer, explain, top_features_for_sample,
+    pretty_feature_label, feature_glossary, narrate,
+)
 
 LSTM_SEQ_LEN = 30
 
@@ -484,25 +487,41 @@ def main():
             (engine_data["cycle"] == cycle_choice).idxmax()
             - engine_data.index[0]
         )
+
+        # Plain-English narrative for this cycle, rendered above the chart
+        st.info(narrate(explanation, sample_idx, k=5))
+
         top_k = top_features_for_sample(explanation, sample_idx, k=10)
         colors = [
             "#ef5350" if v > 0 else "#66bb6a" for v in top_k["shap_value"]
         ]
+        # Pretty labels on the y-axis instead of raw feature names
+        pretty_labels = [pretty_feature_label(f) for f in top_k["feature"]]
         fig_sample = go.Figure(
             go.Bar(
                 x=top_k["shap_value"],
-                y=top_k["feature"],
+                y=pretty_labels,
                 orientation="h",
                 marker_color=colors,
+                hovertext=top_k["feature"],
+                hovertemplate="%{hovertext}<br>SHAP: %{x:.4f}<extra></extra>",
             )
         )
         fig_sample.update_layout(
-            height=380,
+            height=400,
             template="plotly_dark",
-            margin=dict(l=200, r=20, t=20, b=40),
+            margin=dict(l=240, r=20, t=20, b=40),
             xaxis_title="SHAP value (→ anomaly)",
         )
         st.plotly_chart(fig_sample, width='stretch')
+
+        # Feature glossary — collapsed by default
+        with st.expander("📖 Feature glossary — what do these names mean?"):
+            st.caption(
+                "The model sees 184 engineered features built from 15 raw "
+                "sensors. Each name follows one of these patterns:"
+            )
+            st.dataframe(feature_glossary(), width='stretch', hide_index=True)
 
 
 if __name__ == "__main__":
