@@ -27,11 +27,12 @@ from src.evaluation import evaluate_model
 # wheels. Import it defensively so a missing-deps failure on the LSTM never
 # takes down the whole dashboard — the other three detectors stay usable.
 try:
-    from src.models import LSTMAutoencoderDetector
-    _LSTM_IMPORT_ERROR: str | None = None
+    from src.models import LSTMAutoencoderDetector, TransformerAutoencoderDetector
+    _SEQ_IMPORT_ERROR: str | None = None
 except Exception as _e:  # pragma: no cover - environment-dependent
     LSTMAutoencoderDetector = None  # type: ignore[assignment,misc]
-    _LSTM_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
+    TransformerAutoencoderDetector = None  # type: ignore[assignment,misc]
+    _SEQ_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
 # The explainability layer imports `shap`, which drags in numba + llvmlite —
 # wheels that frequently fail to resolve on Streamlit Cloud's Python. Import
@@ -86,7 +87,7 @@ def load_and_process_data():
 
 @st.cache_resource
 def load_models(all_feature_dim, raw_sensor_dim):
-    """Load the saved detectors from disk. LSTM is best-effort."""
+    """Load the saved detectors from disk. Sequence models are best-effort."""
     models = {}
 
     iso = IsolationForestDetector()
@@ -109,11 +110,22 @@ def load_models(all_feature_dim, raw_sensor_dim):
             lstm.load('models/lstm_autoencoder.pt')
             models['LSTM Autoencoder'] = lstm
         except Exception as e:  # pragma: no cover - environment-dependent
-            # Surface the underlying error in the UI rather than crashing.
             st.warning(
                 f"LSTM Autoencoder could not be loaded "
-                f"({type(e).__name__}: {e}). The other three detectors "
-                f"remain available."
+                f"({type(e).__name__}: {e})."
+            )
+
+    if TransformerAutoencoderDetector is not None:
+        try:
+            tfmr = TransformerAutoencoderDetector(
+                n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
+            )
+            tfmr.load('models/transformer_autoencoder.pt')
+            models['Transformer Autoencoder'] = tfmr
+        except Exception as e:  # pragma: no cover - environment-dependent
+            st.warning(
+                f"Transformer Autoencoder could not be loaded "
+                f"({type(e).__name__}: {e})."
             )
 
     return models
@@ -150,11 +162,16 @@ def get_raw_sensor_columns(df, kept_sensors):
     return list(kept_sensors)
 
 
+# Sequence detectors consume sliding windows of raw sensors; the others
+# consume per-cycle feature rows.
+SEQUENCE_MODELS = {"LSTM Autoencoder", "Transformer Autoencoder"}
+
+
 def get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_cols):
     """Return the right feature matrix for each model type."""
     if model_name == "Autoencoder":
         X = engine_data[raw_sensor_cols].values
-    elif model_name == "LSTM Autoencoder":
+    elif model_name in SEQUENCE_MODELS:
         # Build sliding windows of raw sensors per engine, length T = LSTM_SEQ_LEN.
         # Returns shape (n_windows, T, n_sensors). Caller aligns scores to the
         # last cycle of each window.
@@ -195,7 +212,8 @@ def main():
     # Only offer the detectors that actually loaded
     available_models = [
         name for name in (
-            "Isolation Forest", "Autoencoder", "One-Class SVM", "LSTM Autoencoder",
+            "Isolation Forest", "Autoencoder", "One-Class SVM",
+            "LSTM Autoencoder", "Transformer Autoencoder",
         ) if name in models
     ]
     model_name = st.sidebar.selectbox(
@@ -203,9 +221,10 @@ def main():
         available_models,
     )
 
-    if _LSTM_IMPORT_ERROR is not None:
+    if _SEQ_IMPORT_ERROR is not None:
         st.sidebar.caption(
-            f"_LSTM unavailable on this deploy: {_LSTM_IMPORT_ERROR}_"
+            f"_Sequence models (LSTM / Transformer) unavailable on this "
+            f"deploy: {_SEQ_IMPORT_ERROR}_"
         )
 
     threshold = st.sidebar.slider(
@@ -241,9 +260,9 @@ def main():
     # Run selected model
     selected_model = models[model_name]
 
-    # LSTM is windowed: one score per window, positioned at the last cycle.
-    # The first (LSTM_SEQ_LEN - 1) cycles have no score and are left as NaN.
-    if model_name == "LSTM Autoencoder":
+    # Sequence models are windowed: one score per window, positioned at the
+    # last cycle. The first (LSTM_SEQ_LEN - 1) cycles have no score (NaN).
+    if model_name in SEQUENCE_MODELS:
         n_cycles = len(engine_data)
         per_cycle_scores = np.full(n_cycles, np.nan)
         if X_engine.shape[0] > 0:
@@ -395,10 +414,10 @@ def main():
     X_test_raw = np.nan_to_num(test_split[raw_sensor_cols].values, nan=0.0)
     y_test = test_split["anomaly"].values
 
-    # LSTM uses a windowed test population (slightly fewer samples — the
-    # first T-1 cycles of each engine drop out). Only build the windows
-    # when the LSTM actually loaded.
-    if "LSTM Autoencoder" in models:
+    # Sequence models use a windowed test population (slightly fewer samples
+    # — the first T-1 cycles of each engine drop out). Only build the windows
+    # when at least one sequence model loaded.
+    if any(name in models for name in SEQUENCE_MODELS):
         X_test_seq, y_test_seq = create_sequences(
             test_split, raw_sensor_cols, sequence_length=LSTM_SEQ_LEN
         )
@@ -409,7 +428,7 @@ def main():
     for name, model in models.items():
         if name == "Autoencoder":
             X_for_model, y_for_model = X_test_raw, y_test
-        elif name == "LSTM Autoencoder":
+        elif name in SEQUENCE_MODELS:
             X_for_model, y_for_model = X_test_seq, y_test_seq
         else:
             X_for_model, y_for_model = X_test, y_test

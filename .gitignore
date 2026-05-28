@@ -19,6 +19,7 @@ data/model_comparison_pr.png
 data/readme.txt
 data/confusion_matrices.png
 data/lstm_permutation_demo.png
+data/transformer_permutation_demo.png
 
 
 # Saved models (too large for git)
