@@ -257,20 +257,24 @@ sensor-anomaly-detection/
 ├── data/
 │   └── *.txt                     # C-MAPSS sensor recordings
 ├── models/
-│   ├── isolation_forest.pkl      # Trained models, ready to load
-│   ├── autoencoder.pt
-│   └── one_class_svm.pkl
+│   ├── FD001/                    # 5 detectors + scaler + kept_sensors.json
+│   ├── FD002/                    # + kmeans.pkl + regime_scalers.pkl (multi-regime)
+│   ├── FD003/                    # 5 detectors + scaler + kept_sensors.json
+│   └── FD004/                    # + kmeans.pkl + regime_scalers.pkl (multi-regime)
 ├── notebooks/
 │   ├── 01_eda.ipynb              # Walk through the data
 │   ├── 02_feature_engineering.ipynb
-│   ├── 03_model_comparison.ipynb # Training, evaluation, PR curves
+│   ├── 03_model_comparison.ipynb # Training, evaluation, PR curves (FD001)
 │   ├── 04_lstm_temporal.ipynb    # LSTM permutation demo — "does the LSTM actually use time?"
 │   ├── 05_shap_narratives.ipynb  # SHAP plain-English layer — three-stage transform
 │   └── 06_fd_subset_comparison.ipynb  # Cross-subset FD001/02/03/04 — when does the ranking change?
+├── scripts/
+│   └── train_subsets.py          # Train + save per-subset artefacts under models/<SUBSET>/
 ├── src/
 │   ├── data_loader.py            # C-MAPSS ingestion & RUL labelling
 │   ├── preprocessing.py          # Normalisation, splitting, cleaning
 │   ├── feature_engineering.py    # Rolling, lag, EWMA, statistical features
+│   ├── multi_regime.py           # Per-regime KMeans + StandardScaler for FD002/FD004
 │   ├── evaluation.py             # Precision, Recall, F1, AUC-PR, AUC-ROC
 │   ├── explainability.py         # SHAP attributions for Isolation Forest
 │   └── models/
@@ -279,7 +283,7 @@ sensor-anomaly-detection/
 │       ├── lstm_autoencoder.py        # Seq2seq LSTM AE on sliding windows
 │       ├── transformer_autoencoder.py # Self-attention AE on sliding windows
 │       └── one_class_svm.py
-├── tests/                        # 12 unit tests, all passing
+├── tests/                        # 31 unit tests, all passing
 ├── Dockerfile
 ├── requirements.txt
 └── README.md
@@ -310,15 +314,24 @@ jupyter notebook notebooks/
 
 Run in order: `01_eda.ipynb` → `02_feature_engineering.ipynb` → `03_model_comparison.ipynb`.
 
-### 3. Launch the dashboard
+### 3. Train the detectors (one-time, ~25 minutes)
+
+```bash
+python scripts/train_subsets.py             # all four subsets
+python scripts/train_subsets.py --only FD001 # just one
+```
+
+Saved artefacts land under `models/<SUBSET>/` (5 detectors + scaler + kept-sensor list + KMeans/regime scalers for the multi-regime subsets).
+
+### 4. Launch the dashboard
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-Open the printed URL (usually `http://localhost:8501`), pick an engine, watch its anomaly score evolve cycle by cycle, and toggle the SHAP panel to see why specific cycles were flagged.
+Open the printed URL (usually `http://localhost:8501`), pick a **C-MAPSS subset** (FD001/02/03/04), pick an engine, watch its anomaly score evolve cycle by cycle, and toggle the SHAP panel to see why specific cycles were flagged.
 
-### 4. Run the test suite
+### 5. Run the test suite
 
 ```bash
 pytest tests/ -v
@@ -328,7 +341,7 @@ pytest tests/ -v
 
 ## Cross-subset comparison (FD001 / FD002 / FD003 / FD004)
 
-The dashboard is built on FD001 because that's where the SHAP explanations are most defensible, but the full C-MAPSS family contains four subsets that dial up complexity independently:
+The dashboard supports all four C-MAPSS subsets via a subset selector in the sidebar. Each one trains its own copy of all 5 detectors and ships with subset-specific preprocessing artefacts (scaler, kept-sensor list, and KMeans + per-regime scalers for the multi-regime subsets).
 
 | Subset | Operating regimes | Fault modes |
 |---|---|---|
@@ -337,7 +350,7 @@ The dashboard is built on FD001 because that's where the SHAP explanations are m
 | FD003 | 1 | **2** (HPC + Fan) |
 | FD004 | **6** | **2** |
 
-[notebooks/06_fd_subset_comparison.ipynb](notebooks/06_fd_subset_comparison.ipynb) trains all five detectors on each subset with the same hyperparameters (multi-regime subsets get per-regime sensor normalisation via KMeans(k=6) before feature engineering). Single notebook, ~15 minutes end-to-end on a mid-range desktop GPU. F1 results:
+[notebooks/06_fd_subset_comparison.ipynb](notebooks/06_fd_subset_comparison.ipynb) trains all five detectors on each subset with the same hyperparameters (multi-regime subsets get per-regime sensor normalisation via KMeans(k=6) before feature engineering). [scripts/train_subsets.py](scripts/train_subsets.py) is the production version that persists the artefacts under `models/<SUBSET>/` for the dashboard to load. ~15–25 minutes end-to-end on a mid-range desktop GPU. F1 results:
 
 | Model | FD001 | FD002 | FD003 | FD004 |
 |---|---|---|---|---|
@@ -359,7 +372,6 @@ The headline shifts from "*IF dominates*" (FD001-only view) to "*the right detec
 
 ## Limitations & next steps
 
-- **Per-subset dashboard integration is the obvious next step.** The cross-subset notebook (06) shows the result clearly enough to justify training and saving per-subset models, plus adding a subset selector to the dashboard. Held back for now because of the additional storage and slower load — would need a model-cache pattern.
 - **Binary anomaly label and no RUL prediction.** The `anomaly` target is generated by a hard `RUL ≤ 30` cutoff applied *for evaluation only* — the models themselves never see RUL; they detect deviations from healthy patterns unsupervised. Two improvements stack on top: (1) the cutoff is a domain decision and should ideally be configurable per maintenance team; (2) adding a separate **RUL regression** head would let the dashboard surface a meaningful "estimated remaining life" KPI (the current dashboard intentionally omits this because training data runs to failure, so any naive estimate from cycle counts is trivially zero).
 - **No online learning.** Models are trained once and frozen. A real deployment would need to update them as new flight data arrives.
 - **Single-model SHAP.** SHAP attributions are currently produced only for the Isolation Forest. Adding `KernelExplainer` (One-Class SVM) and `DeepExplainer` (Autoencoder) would unlock cross-model attribution comparison.

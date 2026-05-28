@@ -14,13 +14,23 @@ from plotly.subplots import make_subplots
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+import json
+from pathlib import Path
+
 from src.data_loader import load_cmapss, add_rul_to_train, create_anomaly_labels, get_sensor_columns
-from src.preprocessing import remove_constant_sensors, train_test_split_by_unit, create_sequences
+from src.preprocessing import train_test_split_by_unit, create_sequences
 from src.feature_engineering import build_feature_pipeline
 from src.models import (
     IsolationForestDetector, AutoencoderDetector, OneClassSVMDetector,
 )
 from src.evaluation import evaluate_model
+from src.multi_regime import apply_regime_normalisation
+
+# All four C-MAPSS subsets. Multi-regime ones need per-regime sensor
+# normalisation (saved KMeans + regime scalers); single-regime ones skip it.
+SUBSETS = ['FD001', 'FD002', 'FD003', 'FD004']
+SUBSET_REGIMES = {'FD001': 1, 'FD002': 6, 'FD003': 1, 'FD004': 6}
+MODELS_ROOT = Path(__file__).resolve().parent.parent / 'models'
 
 # The LSTM detector pulls in extra torch surface (LSTM cells, weights_only
 # kwarg in newer torch.load) that has occasionally tripped Streamlit Cloud
@@ -68,15 +78,41 @@ st.markdown("""
 
 # ── Cached loaders ──────────────────────────────────────────────────────
 
-@st.cache_data
-def load_and_process_data():
-    """Load C-MAPSS, add RUL/anomaly labels, engineer features."""
-    train_df, _test_df, _rul_df = load_cmapss('FD001')
+@st.cache_data(show_spinner="Loading + featurising subset…")
+def load_and_process_data(subset: str):
+    """Load a C-MAPSS subset and run the same preprocessing as training.
+
+    Returns ``(featured_df, kept_sensors)``. For multi-regime subsets,
+    raw sensor values are first standardised per regime using the saved
+    KMeans + regime scalers (so feature engineering downstream sees the
+    same inputs the model was trained on).
+    """
+    train_df, _test_df, _rul_df = load_cmapss(subset)
     train_df = add_rul_to_train(train_df)
     train_df = create_anomaly_labels(train_df, threshold=30)
 
+    # Use the *saved* kept-sensor list from training so feature engineering
+    # operates on exactly the same columns the model was trained on.
+    subset_dir = MODELS_ROOT / subset
+    with open(subset_dir / 'kept_sensors.json', 'r', encoding='utf-8') as f:
+        kept_sensors = json.load(f)
+
     sensor_cols = get_sensor_columns(train_df)
-    train_df, kept_sensors = remove_constant_sensors(train_df, sensor_cols)
+    train_df = train_df.astype({c: 'float64' for c in sensor_cols})
+
+    if SUBSET_REGIMES[subset] > 1:
+        kmeans = joblib.load(subset_dir / 'kmeans.pkl')
+        regime_scalers = joblib.load(subset_dir / 'regime_scalers.pkl')
+        train_df = apply_regime_normalisation(
+            train_df, sensor_cols, kmeans, regime_scalers
+        )
+
+    # Match training: drop the sensors that were constant (and hence dropped)
+    # at training time. Otherwise the saved StandardScaler complains about
+    # unseen feature names downstream.
+    dropped = set(sensor_cols) - set(kept_sensors)
+    if dropped:
+        train_df = train_df.drop(columns=list(dropped))
 
     featured_df = build_feature_pipeline(
         train_df, kept_sensors,
@@ -85,21 +121,27 @@ def load_and_process_data():
     return featured_df, kept_sensors
 
 
-@st.cache_resource
-def load_models(all_feature_dim, raw_sensor_dim):
-    """Load the saved detectors from disk. Sequence models are best-effort."""
+@st.cache_resource(show_spinner="Loading models for subset…")
+def load_models(subset: str, raw_sensor_dim: int):
+    """Load the saved detectors for ``subset`` from ``models/<subset>/``.
+
+    Sequence models and torch-based detectors are loaded best-effort: if a
+    Cloud-side dependency issue stops one from loading, the others stay
+    usable rather than crashing the whole app.
+    """
+    subset_dir = MODELS_ROOT / subset
     models = {}
 
     iso = IsolationForestDetector()
-    iso.load('models/isolation_forest.pkl')
+    iso.load(str(subset_dir / 'isolation_forest.pkl'))
     models['Isolation Forest'] = iso
 
     ae = AutoencoderDetector(input_dim=raw_sensor_dim)
-    ae.load('models/autoencoder.pt')
+    ae.load(str(subset_dir / 'autoencoder.pt'))
     models['Autoencoder'] = ae
 
     svm = OneClassSVMDetector()
-    svm.load('models/one_class_svm.pkl')
+    svm.load(str(subset_dir / 'one_class_svm.pkl'))
     models['One-Class SVM'] = svm
 
     if LSTMAutoencoderDetector is not None:
@@ -107,11 +149,11 @@ def load_models(all_feature_dim, raw_sensor_dim):
             lstm = LSTMAutoencoderDetector(
                 n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
             )
-            lstm.load('models/lstm_autoencoder.pt')
+            lstm.load(str(subset_dir / 'lstm_autoencoder.pt'))
             models['LSTM Autoencoder'] = lstm
         except Exception as e:  # pragma: no cover - environment-dependent
             st.warning(
-                f"LSTM Autoencoder could not be loaded "
+                f"LSTM Autoencoder could not be loaded for {subset} "
                 f"({type(e).__name__}: {e})."
             )
 
@@ -120,11 +162,11 @@ def load_models(all_feature_dim, raw_sensor_dim):
             tfmr = TransformerAutoencoderDetector(
                 n_sensors=raw_sensor_dim, seq_len=LSTM_SEQ_LEN
             )
-            tfmr.load('models/transformer_autoencoder.pt')
+            tfmr.load(str(subset_dir / 'transformer_autoencoder.pt'))
             models['Transformer Autoencoder'] = tfmr
         except Exception as e:  # pragma: no cover - environment-dependent
             st.warning(
-                f"Transformer Autoencoder could not be loaded "
+                f"Transformer Autoencoder could not be loaded for {subset} "
                 f"({type(e).__name__}: {e})."
             )
 
@@ -132,9 +174,9 @@ def load_models(all_feature_dim, raw_sensor_dim):
 
 
 @st.cache_resource
-def load_scaler():
-    """Load the StandardScaler fit during training (saved by the notebook)."""
-    return joblib.load('models/scaler.pkl')
+def load_scaler(subset: str):
+    """Load the StandardScaler fit during training for this subset."""
+    return joblib.load(MODELS_ROOT / subset / 'scaler.pkl')
 
 
 @st.cache_data
@@ -192,22 +234,44 @@ def get_model_features(model_name, engine_data, all_feature_cols, raw_sensor_col
 # ── Main ────────────────────────────────────────────────────────────────
 
 def main():
-    # Load real data and models
-    data, kept_sensors = load_and_process_data()
+    # ── Sidebar (subset selector first; everything downstream is keyed on it)
+    st.sidebar.title("🔧 Configuration")
+
+    # Only offer subsets that actually have saved artefacts (graceful degrade
+    # if the training script hasn't been run for some subset).
+    available_subsets = [
+        s for s in SUBSETS if (MODELS_ROOT / s / 'isolation_forest.pkl').exists()
+    ]
+    if not available_subsets:
+        st.error(
+            "No trained subsets found under `models/<SUBSET>/`. "
+            "Run `python scripts/train_subsets.py` first."
+        )
+        st.stop()
+
+    subset = st.sidebar.selectbox(
+        "C-MAPSS Subset",
+        available_subsets,
+        format_func=lambda s: (
+            f"{s} ({SUBSET_REGIMES[s]} regime"
+            f"{'s' if SUBSET_REGIMES[s] > 1 else ''}, "
+            f"{'1 fault' if s in ('FD001', 'FD002') else '2 faults'})"
+        ),
+        help=(
+            "FD001: 1 regime / 1 fault. FD002: 6 regimes / 1 fault. "
+            "FD003: 1 regime / 2 faults. FD004: 6 regimes / 2 faults. "
+            "See notebooks/06 for the cross-subset comparison."
+        ),
+    )
+
+    # Load subset-specific data and models. Cached by subset key, so
+    # switching is fast after the first visit.
+    data, kept_sensors = load_and_process_data(subset)
     all_feature_cols = get_all_feature_columns(data)
     raw_sensor_cols = get_raw_sensor_columns(data, kept_sensors)
-    models = load_models(
-        all_feature_dim=len(all_feature_cols),
-        raw_sensor_dim=len(raw_sensor_cols)
-    )
-    scaler = load_scaler()
-    # Scaled view: same rows as `data`, but feature_cols are standardised
-    # using the StandardScaler fit during training. Used for all model
-    # inputs. The original `data` stays untouched for display.
+    models = load_models(subset, raw_sensor_dim=len(raw_sensor_cols))
+    scaler = load_scaler(subset)
     scaled_data = apply_scaler(scaler, data, all_feature_cols)
-
-    # ── Sidebar ─────────────────────────────────────────────────────────
-    st.sidebar.title("🔧 Configuration")
 
     # Only offer the detectors that actually loaded
     available_models = [
@@ -240,6 +304,10 @@ def main():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown(
+        f"**Subset:** {subset} "
+        f"({SUBSET_REGIMES[subset]} regime"
+        f"{'s' if SUBSET_REGIMES[subset] > 1 else ''}, "
+        f"{len(raw_sensor_cols)} sensors kept)\n\n"
         "**Dataset:** NASA C-MAPSS Turbofan\n\n"
         "**Author:** Anjana Bandara\n\n"
         "MSc AI & Data Science"
@@ -292,7 +360,10 @@ def main():
 
     # ── Header ──────────────────────────────────────────────────────────
     st.title("🔧 Industrial Sensor Anomaly Detection")
-    st.markdown("Real-time monitoring and anomaly detection for turbofan engine sensors")
+    st.markdown(
+        f"Real-time monitoring and anomaly detection for turbofan engine "
+        f"sensors — **{subset}** subset"
+    )
 
     # ── KPI cards ───────────────────────────────────────────────────────
     col1, col2, col3 = st.columns(3)
@@ -398,12 +469,16 @@ def main():
     st.plotly_chart(fig_score, width='stretch')
 
     # ── Model comparison ────────────────────────────────────────────────
-    st.subheader("🏆 Model Comparison")
+    st.subheader(f"🏆 Model Comparison — {subset}")
+    if SUBSET_REGIMES[subset] > 1:
+        _regime_note = " (and per-regime normalised before that)"
+    else:
+        _regime_note = ""
     st.caption(
-        "Evaluated on the held-out test split (20 engines, seed=42), "
-        "matching the training-notebook protocol that produced the README "
-        "metrics. Inputs are standardised with the saved StandardScaler; "
-        "each detector uses its F1-optimal threshold from training."
+        "Evaluated on the held-out 20%-engines test split (seed=42), "
+        "matching the per-subset training protocol. Inputs are standardised "
+        f"with the saved StandardScaler{_regime_note}; each detector uses "
+        "its F1-optimal threshold from training."
     )
 
     # Same 80/20 unit-level split as the training notebook
