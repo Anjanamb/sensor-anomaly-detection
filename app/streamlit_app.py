@@ -194,8 +194,14 @@ def load_if_explainer(_iso_detector, background_matrix):
 
 
 def get_all_feature_columns(df):
-    """Return all engineered + raw feature columns (for IF and SVM)."""
-    exclude = {'unit_id', 'cycle', 'rul', 'anomaly'}
+    """Return all engineered + raw feature columns (for IF and SVM).
+
+    ``regime`` is excluded because it's the KMeans label added by
+    per-regime normalisation, not a feature the model was trained on —
+    the training pipeline drops it from ``feature_cols`` and so does the
+    saved scaler.
+    """
+    exclude = {'unit_id', 'cycle', 'rul', 'anomaly', 'regime'}
     return [c for c in df.columns if c not in exclude]
 
 
