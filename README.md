@@ -267,7 +267,8 @@ sensor-anomaly-detection/
 │   ├── 03_model_comparison.ipynb # Training, evaluation, PR curves (FD001)
 │   ├── 04_lstm_temporal.ipynb    # LSTM permutation demo — "does the LSTM actually use time?"
 │   ├── 05_shap_narratives.ipynb  # SHAP plain-English layer — three-stage transform
-│   └── 06_fd_subset_comparison.ipynb  # Cross-subset FD001/02/03/04 — when does the ranking change?
+│   ├── 06_fd_subset_comparison.ipynb  # Cross-subset FD001/02/03/04 — when does the ranking change?
+│   └── 07_feature_importance.ipynb    # Global SHAP, sensor → physical meaning, lifecycle pattern
 ├── scripts/
 │   └── train_subsets.py          # Train + save per-subset artefacts under models/<SUBSET>/
 ├── src/
@@ -275,6 +276,7 @@ sensor-anomaly-detection/
 │   ├── preprocessing.py          # Normalisation, splitting, cleaning
 │   ├── feature_engineering.py    # Rolling, lag, EWMA, statistical features
 │   ├── multi_regime.py           # Per-regime KMeans + StandardScaler for FD002/FD004
+│   ├── sensor_descriptions.py    # NASA C-MAPSS sensor → physical-quantity mapping
 │   ├── evaluation.py             # Precision, Recall, F1, AUC-PR, AUC-ROC
 │   ├── explainability.py         # SHAP attributions for Isolation Forest
 │   └── models/
@@ -336,6 +338,67 @@ Open the printed URL (usually `http://localhost:8501`), pick a **C-MAPSS subset*
 ```bash
 pytest tests/ -v
 ```
+
+---
+
+## Feature importance findings — what the model actually pays attention to
+
+The dashboard has a **Global Feature Importance** panel that aggregates SHAP attributions across the whole held-out test set (per subset, cached). Three findings from the FD001 analysis ([notebook 07](notebooks/07_feature_importance.ipynb)):
+
+### 1. The top sensor is downstream of the fault, not at it
+
+| Rank | Sensor | Subsystem | Σ \|SHAP\| |
+|---|---|---|---|
+| 1 | **P15** — Bypass-duct total pressure | **Fan** | 0.285 |
+| 2 | NRc — Corrected core speed | Core | 0.236 |
+| 3 | BPR — Bypass ratio | Performance | 0.225 |
+| 4 | T50 — LPT outlet temperature | LPT | 0.224 |
+| 5 | W32 — LPT coolant bleed | LPT | 0.218 |
+| 6 | T30 — HPC outlet temperature | HPC | 0.212 |
+| 7 | phi — Fuel-flow / Ps30 | Combustor | 0.207 |
+| 8 | Ps30 — HPC outlet static pressure | HPC | 0.207 |
+| 9 | NRf — Corrected fan speed | Fan | 0.205 |
+| 10 | htBleed — Bleed enthalpy | HPC | 0.200 |
+
+FD001's only fault mode is **HPC degradation**, so the obvious expectation is that the top sensor sits at the HPC. It doesn't. The single most informative feature is **P15 (bypass-duct total pressure)** in the Fan section. The model is reading HPC degradation through the *airflow redistribution* it causes: when the HPC loses efficiency, the fan/core balance shifts and bypass-duct pressure picks it up before T30 or Ps30 (the direct HPC sensors) drift much. Aggregated by subsystem, HPC still leads at 25.9% (4 sensors), with Fan a close second at 21.8% (3 sensors).
+
+### 2. Drift beats volatility beats distribution shape — but engineered always beats raw
+
+Feature-family ranking (share of total |SHAP|):
+
+| Family | Share | Mean signed SHAP |
+|---|---|---|
+| **Rolling mean** | 19.8% | +0.180 (predominantly anomaly-pushing) |
+| Rolling std | 16.6% | -0.010 (mixed direction) |
+| Diff (k-cycle change) | 15.7% | -0.006 |
+| Lag | 12.0% | +0.096 |
+| EWMA | 10.8% | +0.110 |
+| Raw sensor value | 8.6% | +0.074 |
+| Kurtosis | 8.6% | -0.023 |
+| Skewness | 7.9% | -0.012 |
+
+Engineered features clearly beat raw values (raw is bottom of the pack — validating the feature-engineering work). Rolling mean is the most *directional* signal — its signed SHAP is strongly positive while the others sit near zero — which says drift features are the ones reliably pushing the model toward anomaly, while volatility / diff features push both directions depending on the engine.
+
+### 3. The model uses different sensors at different lifecycle stages
+
+Top sensors' |SHAP| across three RUL buckets:
+
+| Sensor | Mid-life (RUL > 80) | Pre-warning (30 < RUL ≤ 80) | Warning zone (RUL ≤ 30) |
+|---|---|---|---|
+| **P15** (Fan) | **0.328** | 0.241 | **0.173** ↓ |
+| NRc (Core) | 0.191 | 0.236 | **0.429** ↑ |
+| BPR (Performance) | 0.190 | 0.210 | **0.398** ↑ |
+| T50 (LPT) | 0.170 | 0.223 | **0.457** ↑ |
+| W32 (LPT) | 0.193 | 0.200 | 0.353 |
+| T30 (HPC) | 0.204 | 0.190 | 0.280 |
+
+This is the sharpest finding. **P15 is an early indicator** — its importance drops 47% from mid-life to the warning zone (0.328 → 0.173). **T50, NRc, BPR are late indicators** — their importance rises 2–3× as failure approaches; T50 alone jumps 2.7× (0.170 → 0.457). The IF is implicitly learning a temporal progression: bypass-duct pressure drifts first; LPT temperature, core speed, and bypass ratio ramp up later. That's exactly the kind of mechanistic story SHAP attribution gives you that raw F1 numbers can't.
+
+### Cross-subset: FD004 picks up different signals
+
+The IF on FD004 (six operating regimes + two fault modes) reranks meaningfully. Five sensors stay in both subsets' top-10 (BPR, T50, W32, Ps30, htBleed — the robust drivers). Five drop out from FD001 (P15, NRc, T30, phi, NRf) and five new ones appear on FD004 (P30, farB, Nc, epr, Nf). Notably the **"corrected" speeds (NRc, NRf) lose ground to their physical counterparts (Nc, Nf)** on FD004 because per-regime normalisation already removes the operating-condition variance; raw RPM carries more useful information once the regime adjustment is upstream. Also, sensors that were *constant on FD001* (epr, farB) become informative on FD004 because they actually vary across the six operating regimes.
+
+See [notebook 07](notebooks/07_feature_importance.ipynb) for the full analysis, including the side-by-side FD001 vs FD004 ranking table and the lifecycle-pattern visualisation.
 
 ---
 

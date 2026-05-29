@@ -59,6 +59,11 @@ except Exception as _e:  # pragma: no cover - environment-dependent
     pretty_feature_label = feature_glossary = narrate = None  # type: ignore
     _SHAP_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
+# Sensor descriptions are pure data — safe to import unconditionally.
+from src.sensor_descriptions import (  # noqa: E402
+    SENSOR_TABLE, describe_sensor, INTERPRETATION,
+)
+
 LSTM_SEQ_LEN = 30
 
 # ── Page config ─────────────────────────────────────────────────────────
@@ -191,6 +196,85 @@ def apply_scaler(_scaler, df, feature_cols):
 def load_if_explainer(_iso_detector, background_matrix):
     """Build the TreeExplainer once per session for the Isolation Forest."""
     return build_explainer(_iso_detector, background_matrix, max_background=200)
+
+
+@st.cache_data(show_spinner="Computing global SHAP across the test set…")
+def compute_global_shap(subset: str):
+    """
+    Compute global SHAP attributions for the Isolation Forest on
+    ``subset``'s held-out test split.
+
+    Returns a dict with the per-sensor + per-family aggregations the
+    panel needs, the RUL-bucket table, and the raw SHAP matrix in case
+    the caller wants further analysis.
+    """
+    data, kept_sensors = load_and_process_data(subset)
+    all_feature_cols = get_all_feature_columns(data)
+    raw_sensor_cols = get_raw_sensor_columns(data, kept_sensors)
+    scaler = load_scaler(subset)
+    scaled = apply_scaler(scaler, data, all_feature_cols)
+
+    train_split, test_split = train_test_split_by_unit(
+        scaled, test_ratio=0.2, seed=42
+    )
+    X_test = np.nan_to_num(test_split[all_feature_cols].values, nan=0.0)
+    rul_test = test_split['rul'].values
+
+    healthy_train = train_split[train_split['anomaly'] == 0]
+    bg_rows = healthy_train[all_feature_cols].sample(
+        min(200, len(healthy_train)), random_state=42
+    )
+    background = np.nan_to_num(bg_rows.values, nan=0.0)
+
+    iso = load_models(subset, raw_sensor_dim=len(raw_sensor_cols))['Isolation Forest']
+    explainer = build_explainer(iso, background, max_background=200)
+    explanation = explain(iso, X_test, all_feature_cols, explainer=explainer)
+
+    # Per-sensor aggregation with physical descriptions joined in
+    per_sensor = explanation.per_sensor.copy()
+    per_sensor = per_sensor[per_sensor['base_sensor'].str.startswith('sensor_')]
+    per_sensor = per_sensor.merge(
+        SENSOR_TABLE.reset_index().rename(columns={'sensor': 'base_sensor'}),
+        on='base_sensor', how='left',
+    )
+
+    # RUL-bucket per-sensor importance using the top-7 overall sensors
+    def _bucket(r):
+        if r > 80:
+            return 'mid-life (RUL > 80)'
+        if r > 30:
+            return 'pre-warning (30 < RUL <= 80)'
+        return 'warning zone (RUL <= 30)'
+
+    bucket_labels = pd.Series(rul_test).apply(_bucket)
+    top7 = per_sensor.head(7)['base_sensor'].tolist()
+    bucket_rows = {}
+    for label, idx in bucket_labels.groupby(bucket_labels).groups.items():
+        arr = np.abs(explanation.shap_values[list(idx)]).mean(axis=0)
+        df_b = pd.DataFrame({'feature': all_feature_cols, 'abs_shap': arr})
+        df_b['base_sensor'] = df_b['feature'].apply(
+            lambda f: f.split('_roll_')[0].split('_lag_')[0].split('_diff_')[0]
+                      .split('_ewma_')[0].split('_skew_')[0].split('_kurt_')[0]
+                      if 'sensor_' in f else f
+        )
+        bucket_rows[label] = (
+            df_b.groupby('base_sensor')['abs_shap'].sum().reindex(top7).fillna(0)
+        )
+    bucket_df = pd.DataFrame(bucket_rows)
+    # Stable column order
+    cols = [c for c in
+            ['mid-life (RUL > 80)', 'pre-warning (30 < RUL <= 80)',
+             'warning zone (RUL <= 30)']
+            if c in bucket_df.columns]
+    bucket_df = bucket_df[cols]
+
+    return {
+        'per_sensor': per_sensor,
+        'per_family': explanation.per_family,
+        'bucket_df': bucket_df,
+        'top7_sensors': top7,
+        'n_test_rows': X_test.shape[0],
+    }
 
 
 def get_all_feature_columns(df):
@@ -547,6 +631,178 @@ def main():
     st.plotly_chart(fig_comp, width='stretch')
 
     st.dataframe(comparison_df.set_index("Model"), width='stretch')
+
+    # ── Global Feature Importance ───────────────────────────────────────
+    st.markdown("---")
+    st.subheader(
+        f"🌐 Global Feature Importance — {subset}"
+    )
+    st.caption(
+        "What does the Isolation Forest pay attention to *across the whole "
+        "test set*, not just one engine? SHAP attributions are aggregated "
+        "into per-sensor and per-feature-family rankings, with physical "
+        "descriptions from the NASA C-MAPSS spec. See "
+        "[notebooks/07_feature_importance.ipynb](https://github.com/Anjanamb/sensor-anomaly-detection/blob/main/notebooks/07_feature_importance.ipynb) "
+        "for the full analysis."
+    )
+
+    if _SHAP_IMPORT_ERROR is not None:
+        st.info(
+            "Global feature importance unavailable on this deploy because "
+            f"`shap` failed to import ({_SHAP_IMPORT_ERROR}). It runs "
+            "locally — see notebook 07 for the full walkthrough."
+        )
+    elif st.toggle("Compute global feature importance", value=False):
+        results = compute_global_shap(subset)
+        per_sensor = results['per_sensor']
+        per_family = results['per_family']
+        bucket_df = results['bucket_df']
+
+        st.markdown(
+            f"_Computed across {results['n_test_rows']:,} test-set cycles "
+            f"({len(per_sensor)} sensors × ~{per_sensor['n_features'].iloc[0]} "
+            f"engineered features each)._"
+        )
+
+        col_a, col_b = st.columns([1.3, 1])
+
+        with col_a:
+            st.markdown("**Top sensors by total |SHAP|**")
+            top10 = per_sensor.head(10).copy()
+            # Use a compact label that still carries the physical meaning
+            top10['label'] = top10.apply(
+                lambda r: f"{r['base_sensor'].replace('sensor_', 'S')} · "
+                          f"{r['symbol']} ({r['subsystem']})",
+                axis=1,
+            )
+            subsystem_color = {
+                'HPC': '#ef5350', 'Fan': '#4fc3f7', 'LPT': '#ffca28',
+                'LPC': '#ff7043', 'Core': '#66bb6a', 'Performance': '#ab47bc',
+                'Combustor': '#26a69a', 'Control': '#9e9e9e', 'HPT': '#bc6c25',
+            }
+            colors = [
+                subsystem_color.get(s, '#9e9e9e') for s in top10['subsystem'][::-1]
+            ]
+            fig_top = go.Figure(go.Bar(
+                x=top10['total_abs_shap'][::-1],
+                y=top10['label'][::-1],
+                orientation='h',
+                marker_color=colors,
+                hovertext=top10['quantity'][::-1],
+                hovertemplate="%{y}<br>%{hovertext}<br>Σ|SHAP|: %{x:.3f}<extra></extra>",
+            ))
+            fig_top.update_layout(
+                height=380, template='plotly_dark',
+                margin=dict(l=140, r=20, t=10, b=40),
+                xaxis_title='Σ |SHAP|',
+            )
+            st.plotly_chart(fig_top, width='stretch')
+
+        with col_b:
+            st.markdown("**By engine subsystem**")
+            subsystem_imp = (
+                per_sensor.groupby('subsystem')
+                .agg(total=('total_abs_shap', 'sum'),
+                     n=('base_sensor', 'count'))
+                .sort_values('total', ascending=False)
+                .reset_index()
+            )
+            subsystem_imp['share'] = 100 * subsystem_imp['total'] / subsystem_imp['total'].sum()
+            fig_sub = go.Figure(go.Bar(
+                x=subsystem_imp['share'][::-1],
+                y=subsystem_imp['subsystem'][::-1],
+                orientation='h',
+                marker_color=[
+                    subsystem_color.get(s, '#9e9e9e')
+                    for s in subsystem_imp['subsystem'][::-1]
+                ],
+                hovertext=[
+                    f"{n} sensors, Σ|SHAP|={t:.3f}"
+                    for n, t in zip(subsystem_imp['n'][::-1],
+                                    subsystem_imp['total'][::-1])
+                ],
+                hovertemplate="%{y}<br>%{hovertext}<br>%{x:.1f}% share<extra></extra>",
+            ))
+            fig_sub.update_layout(
+                height=380, template='plotly_dark',
+                margin=dict(l=110, r=20, t=10, b=40),
+                xaxis_title='% of total |SHAP|',
+            )
+            st.plotly_chart(fig_sub, width='stretch')
+
+        # Feature family ranking
+        st.markdown("**Feature families — what *kind* of signal matters?**")
+        fam_top = per_family.copy()
+        fam_top['share'] = 100 * fam_top['total_abs_shap'] / fam_top['total_abs_shap'].sum()
+        fig_fam = go.Figure(go.Bar(
+            x=fam_top['share'],
+            y=fam_top['family'],
+            orientation='h',
+            marker_color='#ab47bc',
+            hovertext=[
+                f"signed mean SHAP = {v:+.3f}"
+                for v in fam_top['mean_signed_shap']
+            ],
+            hovertemplate="%{y}<br>%{x:.1f}%<br>%{hovertext}<extra></extra>",
+        ))
+        fig_fam.update_layout(
+            height=320, template='plotly_dark',
+            margin=dict(l=110, r=20, t=10, b=40),
+            xaxis_title='% of total |SHAP|',
+        )
+        st.plotly_chart(fig_fam, width='stretch')
+
+        # Mechanistic interpretation cards
+        with st.expander("📖 What do the top 5 sensors mean physically?"):
+            for _, row in per_sensor.head(5).iterrows():
+                s = row['base_sensor']
+                st.markdown(
+                    f"**#{row.name + 1 if 'rank' not in row else row['rank']}. "
+                    f"{describe_sensor(s)}**  \n"
+                    f"_Σ|SHAP|_: {row['total_abs_shap']:.3f}"
+                )
+                if s in INTERPRETATION:
+                    st.markdown(INTERPRETATION[s])
+                st.markdown("")
+
+        # RUL-bucket comparison
+        if not bucket_df.empty and len(bucket_df.columns) >= 2:
+            with st.expander(
+                "⏱ Lifecycle pattern — do the same sensors matter near failure?"
+            ):
+                st.caption(
+                    "Top sensors' total |SHAP| split into RUL buckets. "
+                    "Sensors whose bars *grow* toward the right are late "
+                    "indicators (only useful close to failure); sensors "
+                    "whose bars *shrink* are early indicators."
+                )
+                bucket_disp = bucket_df.copy()
+                bucket_disp.index = [
+                    SENSOR_TABLE.loc[s, 'symbol'] if s in SENSOR_TABLE.index
+                    else s
+                    for s in bucket_disp.index
+                ]
+                fig_b = go.Figure()
+                bucket_colors = {
+                    'mid-life (RUL > 80)': '#4fc3f7',
+                    'pre-warning (30 < RUL <= 80)': '#ffca28',
+                    'warning zone (RUL <= 30)': '#ef5350',
+                }
+                for col in bucket_disp.columns:
+                    fig_b.add_trace(go.Bar(
+                        x=bucket_disp[col],
+                        y=bucket_disp.index,
+                        name=col,
+                        orientation='h',
+                        marker_color=bucket_colors.get(col, '#9e9e9e'),
+                    ))
+                fig_b.update_layout(
+                    barmode='group', height=340, template='plotly_dark',
+                    margin=dict(l=80, r=20, t=10, b=40),
+                    xaxis_title='Total |SHAP| in this RUL bucket',
+                    legend=dict(orientation='h', y=-0.2),
+                )
+                st.plotly_chart(fig_b, width='stretch')
 
     # ── Explainability (Isolation Forest) ───────────────────────────────
     st.markdown("---")

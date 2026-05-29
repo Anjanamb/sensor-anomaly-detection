@@ -21,6 +21,7 @@ data/confusion_matrices.png
 data/lstm_permutation_demo.png
 data/transformer_permutation_demo.png
 data/cross_subset_gap.png
+data/feature_importance_by_rul.png
 
 
 # Saved models (too large for git)
