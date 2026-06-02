@@ -3,9 +3,9 @@
 [![Live Demo](https://img.shields.io/badge/Streamlit-Live%20Demo-FF4B4B?logo=streamlit&logoColor=white)](https://sensor-anomaly-detection-aj.streamlit.app/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-12%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)](tests/)
 
-> **[Try the live dashboard →](https://sensor-anomaly-detection-aj.streamlit.app/)**
+> **[Try the live dashboard →](https://sensor-anomaly-detection-aj.streamlit.app/)**  ·  **[Read the journey doc — decisions, challenges, lessons (5 min)](JOURNEY.md)**
 
 ---
 
