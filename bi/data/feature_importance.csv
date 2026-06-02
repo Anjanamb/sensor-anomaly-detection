@@ -1,0 +1,261 @@
+subset,rul_bucket,rank,sensor_id,symbol,quantity,units,subsystem,total_abs_shap
+FD001,overall,1,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.2570818966567472
+FD001,overall,2,sensor_14,NRc,Corrected core speed,rpm,Core,0.24142855195672167
+FD001,overall,3,sensor_15,BPR,Bypass ratio,—,Performance,0.23315404916743176
+FD001,overall,4,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.2236277687416127
+FD001,overall,5,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.21321690466357546
+FD001,overall,6,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.21193019476769337
+FD001,overall,7,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.21060726068724306
+FD001,overall,8,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.20786544524965697
+FD001,overall,9,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.20398495868142755
+FD001,overall,10,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.20254185590851845
+FD001,overall,11,sensor_8,Nf,Physical fan speed,rpm,Fan,0.19241342011447707
+FD001,overall,12,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.1900535246578114
+FD001,overall,13,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.18664709654570555
+FD001,overall,14,sensor_9,Nc,Physical core speed,rpm,Core,0.18389617041250636
+FD001,overall,15,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.18088669813546776
+FD001,mid-life (RUL > 80),1,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.3097080950732313
+FD001,mid-life (RUL > 80),2,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.20600738498444127
+FD001,mid-life (RUL > 80),3,sensor_14,NRc,Corrected core speed,rpm,Core,0.19603272588183057
+FD001,mid-life (RUL > 80),4,sensor_15,BPR,Bypass ratio,—,Performance,0.195273862660822
+FD001,mid-life (RUL > 80),5,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.18753260005400021
+FD001,mid-life (RUL > 80),6,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.1845282020927546
+FD001,mid-life (RUL > 80),7,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.18142639967549162
+FD001,mid-life (RUL > 80),8,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.18029889779098937
+FD001,mid-life (RUL > 80),9,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.17756120911925533
+FD001,mid-life (RUL > 80),10,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.17414894460151445
+FD001,mid-life (RUL > 80),11,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.17367895120730342
+FD001,mid-life (RUL > 80),12,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.16703766010267573
+FD001,mid-life (RUL > 80),13,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.16697512219562446
+FD001,mid-life (RUL > 80),14,sensor_8,Nf,Physical fan speed,rpm,Fan,0.16551629575591276
+FD001,mid-life (RUL > 80),15,sensor_9,Nc,Physical core speed,rpm,Core,0.15713248961001908
+FD001,pre-warning (30 < RUL <= 80),1,sensor_14,NRc,Corrected core speed,rpm,Core,0.24194649530939988
+FD001,pre-warning (30 < RUL <= 80),2,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.22085929191769077
+FD001,pre-warning (30 < RUL <= 80),3,sensor_15,BPR,Bypass ratio,—,Performance,0.2168396577665761
+FD001,pre-warning (30 < RUL <= 80),4,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.20058317130441033
+FD001,pre-warning (30 < RUL <= 80),5,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.19700514701365177
+FD001,pre-warning (30 < RUL <= 80),6,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.19590296782132205
+FD001,pre-warning (30 < RUL <= 80),7,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.19056423808789247
+FD001,pre-warning (30 < RUL <= 80),8,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.1902410214803023
+FD001,pre-warning (30 < RUL <= 80),9,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.18950918910820758
+FD001,pre-warning (30 < RUL <= 80),10,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.18841826274104786
+FD001,pre-warning (30 < RUL <= 80),11,sensor_9,Nc,Physical core speed,rpm,Core,0.18820415898105386
+FD001,pre-warning (30 < RUL <= 80),12,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.18515480161287728
+FD001,pre-warning (30 < RUL <= 80),13,sensor_8,Nf,Physical fan speed,rpm,Fan,0.1805673584551192
+FD001,pre-warning (30 < RUL <= 80),14,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.17593620898742082
+FD001,pre-warning (30 < RUL <= 80),15,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.15443319590425916
+FD001,warning zone (RUL <= 30),1,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.47188689293278024
+FD001,warning zone (RUL <= 30),2,sensor_14,NRc,Corrected core speed,rpm,Core,0.4361613069460053
+FD001,warning zone (RUL <= 30),3,sensor_15,BPR,Bypass ratio,—,Performance,0.42265787103841745
+FD001,warning zone (RUL <= 30),4,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.35825918558398373
+FD001,warning zone (RUL <= 30),5,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.3514978272839446
+FD001,warning zone (RUL <= 30),6,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.345880779942903
+FD001,warning zone (RUL <= 30),7,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.33836951332602505
+FD001,warning zone (RUL <= 30),8,sensor_8,Nf,Physical fan speed,rpm,Fan,0.32739451821299853
+FD001,warning zone (RUL <= 30),9,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.3129134954374362
+FD001,warning zone (RUL <= 30),10,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.31224663537860425
+FD001,warning zone (RUL <= 30),11,sensor_9,Nc,Physical core speed,rpm,Core,0.29224746533975854
+FD001,warning zone (RUL <= 30),12,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.2813338566736409
+FD001,warning zone (RUL <= 30),13,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.24492163062909383
+FD001,warning zone (RUL <= 30),14,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.2378800584475837
+FD001,warning zone (RUL <= 30),15,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.12904053030996668
+FD002,overall,1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.2558779086517089
+FD002,overall,2,sensor_8,Nf,Physical fan speed,rpm,Fan,0.2135627178334114
+FD002,overall,3,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.20821989133586563
+FD002,overall,4,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.20172713139000592
+FD002,overall,5,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.2016716291115226
+FD002,overall,6,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.19801196789841277
+FD002,overall,7,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.19773030462018798
+FD002,overall,8,sensor_15,BPR,Bypass ratio,—,Performance,0.19502954235672376
+FD002,overall,9,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.1877700978992283
+FD002,overall,10,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.18230638553691816
+FD002,overall,11,sensor_9,Nc,Physical core speed,rpm,Core,0.18142656162448823
+FD002,overall,12,sensor_14,NRc,Corrected core speed,rpm,Core,0.18120717275839332
+FD002,overall,13,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.17508838037002591
+FD002,overall,14,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.17312120756932756
+FD002,overall,15,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.1634085203887349
+FD002,overall,16,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.16263017910684277
+FD002,overall,17,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.1523833250229404
+FD002,mid-life (RUL > 80),1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.18663219499434586
+FD002,mid-life (RUL > 80),2,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.18541161070025888
+FD002,mid-life (RUL > 80),3,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.17741960838241855
+FD002,mid-life (RUL > 80),4,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.17361436637156705
+FD002,mid-life (RUL > 80),5,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.17249346120935946
+FD002,mid-life (RUL > 80),6,sensor_15,BPR,Bypass ratio,—,Performance,0.17175232861610218
+FD002,mid-life (RUL > 80),7,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.171338049936685
+FD002,mid-life (RUL > 80),8,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.17108445355333196
+FD002,mid-life (RUL > 80),9,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.17042307841750765
+FD002,mid-life (RUL > 80),10,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.16957800451458765
+FD002,mid-life (RUL > 80),11,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.168753523530851
+FD002,mid-life (RUL > 80),12,sensor_14,NRc,Corrected core speed,rpm,Core,0.16266592157376716
+FD002,mid-life (RUL > 80),13,sensor_8,Nf,Physical fan speed,rpm,Fan,0.16173657503631245
+FD002,mid-life (RUL > 80),14,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.15853435791749415
+FD002,mid-life (RUL > 80),15,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.15391092807166837
+FD002,mid-life (RUL > 80),16,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.15118066110595887
+FD002,mid-life (RUL > 80),17,sensor_9,Nc,Physical core speed,rpm,Core,0.14857014488695913
+FD002,pre-warning (30 < RUL <= 80),1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.29196171783631863
+FD002,pre-warning (30 < RUL <= 80),2,sensor_8,Nf,Physical fan speed,rpm,Fan,0.22422908030877267
+FD002,pre-warning (30 < RUL <= 80),3,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.20757568869973644
+FD002,pre-warning (30 < RUL <= 80),4,sensor_9,Nc,Physical core speed,rpm,Core,0.19940470512236394
+FD002,pre-warning (30 < RUL <= 80),5,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.19581621161068238
+FD002,pre-warning (30 < RUL <= 80),6,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.19105055393501139
+FD002,pre-warning (30 < RUL <= 80),7,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.18765941822484947
+FD002,pre-warning (30 < RUL <= 80),8,sensor_14,NRc,Corrected core speed,rpm,Core,0.1873641983616195
+FD002,pre-warning (30 < RUL <= 80),9,sensor_15,BPR,Bypass ratio,—,Performance,0.1864139563420466
+FD002,pre-warning (30 < RUL <= 80),10,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.1859244261602355
+FD002,pre-warning (30 < RUL <= 80),11,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.18333788493180284
+FD002,pre-warning (30 < RUL <= 80),12,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.17224180411997658
+FD002,pre-warning (30 < RUL <= 80),13,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.17033603406561568
+FD002,pre-warning (30 < RUL <= 80),14,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.1643295160342253
+FD002,pre-warning (30 < RUL <= 80),15,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.16391788896049433
+FD002,pre-warning (30 < RUL <= 80),16,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.14622458964122897
+FD002,pre-warning (30 < RUL <= 80),17,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.13319226495979972
+FD002,warning zone (RUL <= 30),1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.48368191463852134
+FD002,warning zone (RUL <= 30),2,sensor_8,Nf,Physical fan speed,rpm,Fan,0.410415023234866
+FD002,warning zone (RUL <= 30),3,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.36159099982822224
+FD002,warning zone (RUL <= 30),4,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.3374492347992528
+FD002,warning zone (RUL <= 30),5,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.32675996757634795
+FD002,warning zone (RUL <= 30),6,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.3193441224368424
+FD002,warning zone (RUL <= 30),7,sensor_15,BPR,Bypass ratio,—,Performance,0.3050668951626925
+FD002,warning zone (RUL <= 30),8,sensor_9,Nc,Physical core speed,rpm,Core,0.2881355253614576
+FD002,warning zone (RUL <= 30),9,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.26955091749181687
+FD002,warning zone (RUL <= 30),10,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.2533858635484057
+FD002,warning zone (RUL <= 30),11,sensor_14,NRc,Corrected core speed,rpm,Core,0.24785691458150202
+FD002,warning zone (RUL <= 30),12,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.23906963730921107
+FD002,warning zone (RUL <= 30),13,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.21125615914620227
+FD002,warning zone (RUL <= 30),14,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.20891814291760535
+FD002,warning zone (RUL <= 30),15,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.20193575095004893
+FD002,warning zone (RUL <= 30),16,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.196566114449707
+FD002,warning zone (RUL <= 30),17,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.18830397795310752
+FD003,overall,1,sensor_14,NRc,Corrected core speed,rpm,Core,0.24822737902861194
+FD003,overall,2,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.24194732945938074
+FD003,overall,3,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.20997330613797716
+FD003,overall,4,sensor_9,Nc,Physical core speed,rpm,Core,0.20989387346787494
+FD003,overall,5,sensor_15,BPR,Bypass ratio,—,Performance,0.20908332624306344
+FD003,overall,6,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.2048825029618105
+FD003,overall,7,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.198506830820321
+FD003,overall,8,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.19318959751178771
+FD003,overall,9,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.19286904336297678
+FD003,overall,10,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.19198728633416967
+FD003,overall,11,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.18770117010624177
+FD003,overall,12,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.18388411334177884
+FD003,overall,13,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.17742727164872557
+FD003,overall,14,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.1771101220733586
+FD003,overall,15,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.16647238617265975
+FD003,overall,16,sensor_8,Nf,Physical fan speed,rpm,Fan,0.13686386756380514
+FD003,mid-life (RUL > 80),1,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.2568980145655392
+FD003,mid-life (RUL > 80),2,sensor_14,NRc,Corrected core speed,rpm,Core,0.2031568940821163
+FD003,mid-life (RUL > 80),3,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.1814315575108851
+FD003,mid-life (RUL > 80),4,sensor_15,BPR,Bypass ratio,—,Performance,0.18064935040752964
+FD003,mid-life (RUL > 80),5,sensor_9,Nc,Physical core speed,rpm,Core,0.17958892066506454
+FD003,mid-life (RUL > 80),6,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.17516366993839338
+FD003,mid-life (RUL > 80),7,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.17494859050153375
+FD003,mid-life (RUL > 80),8,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.17440707763646526
+FD003,mid-life (RUL > 80),9,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.1726548747138159
+FD003,mid-life (RUL > 80),10,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.17256639137053562
+FD003,mid-life (RUL > 80),11,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.1709029371149412
+FD003,mid-life (RUL > 80),12,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.1655111326850013
+FD003,mid-life (RUL > 80),13,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.1621212151545136
+FD003,mid-life (RUL > 80),14,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.1551857454567349
+FD003,mid-life (RUL > 80),15,sensor_8,Nf,Physical fan speed,rpm,Fan,0.14662589464451894
+FD003,mid-life (RUL > 80),16,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.1253675663790565
+FD003,pre-warning (30 < RUL <= 80),1,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.3426735536232781
+FD003,pre-warning (30 < RUL <= 80),2,sensor_14,NRc,Corrected core speed,rpm,Core,0.24292808410817626
+FD003,pre-warning (30 < RUL <= 80),3,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.2356396565385339
+FD003,pre-warning (30 < RUL <= 80),4,sensor_15,BPR,Bypass ratio,—,Performance,0.20524877711732764
+FD003,pre-warning (30 < RUL <= 80),5,sensor_9,Nc,Physical core speed,rpm,Core,0.19655209101638305
+FD003,pre-warning (30 < RUL <= 80),6,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.19052850461254428
+FD003,pre-warning (30 < RUL <= 80),7,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.1825760821194664
+FD003,pre-warning (30 < RUL <= 80),8,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.17777064304158885
+FD003,pre-warning (30 < RUL <= 80),9,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.1750239565664891
+FD003,pre-warning (30 < RUL <= 80),10,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.1737492633086534
+FD003,pre-warning (30 < RUL <= 80),11,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.16867416123196738
+FD003,pre-warning (30 < RUL <= 80),12,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.1679710292034331
+FD003,pre-warning (30 < RUL <= 80),13,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.16731037031472346
+FD003,pre-warning (30 < RUL <= 80),14,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.15901343603034582
+FD003,pre-warning (30 < RUL <= 80),15,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.11899870865423948
+FD003,pre-warning (30 < RUL <= 80),16,sensor_8,Nf,Physical fan speed,rpm,Fan,0.1031971108790927
+FD003,warning zone (RUL <= 30),1,sensor_14,NRc,Corrected core speed,rpm,Core,0.46926015712384034
+FD003,warning zone (RUL <= 30),2,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.38872291138878357
+FD003,warning zone (RUL <= 30),3,sensor_9,Nc,Physical core speed,rpm,Core,0.3742860662003027
+FD003,warning zone (RUL <= 30),4,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.36244237769452803
+FD003,warning zone (RUL <= 30),5,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.3575133238810405
+FD003,warning zone (RUL <= 30),6,sensor_15,BPR,Bypass ratio,—,Performance,0.34932052058661356
+FD003,warning zone (RUL <= 30),7,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.3299590617548538
+FD003,warning zone (RUL <= 30),8,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.3104904620341298
+FD003,warning zone (RUL <= 30),9,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.3083334385690453
+FD003,warning zone (RUL <= 30),10,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.2858936891944806
+FD003,warning zone (RUL <= 30),11,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.28011637444441095
+FD003,warning zone (RUL <= 30),12,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.2792876567309203
+FD003,warning zone (RUL <= 30),13,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.2707503427762818
+FD003,warning zone (RUL <= 30),14,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.20308163176156468
+FD003,warning zone (RUL <= 30),15,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.18163574938767935
+FD003,warning zone (RUL <= 30),16,sensor_8,Nf,Physical fan speed,rpm,Fan,0.14514185389894396
+FD004,overall,1,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.23115629717972733
+FD004,overall,2,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.2295583146852966
+FD004,overall,3,sensor_9,Nc,Physical core speed,rpm,Core,0.22532038115286215
+FD004,overall,4,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.2006484894046966
+FD004,overall,5,sensor_15,BPR,Bypass ratio,—,Performance,0.19648693566589753
+FD004,overall,6,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.1963320969026545
+FD004,overall,7,sensor_8,Nf,Physical fan speed,rpm,Fan,0.19006037555303476
+FD004,overall,8,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.1887583736268543
+FD004,overall,9,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.18452212080633146
+FD004,overall,10,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.18366212162126044
+FD004,overall,11,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.18231520127612996
+FD004,overall,12,sensor_14,NRc,Corrected core speed,rpm,Core,0.17508839672951063
+FD004,overall,13,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.16972746682184137
+FD004,overall,14,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.16668271557803208
+FD004,overall,15,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.1610911257696416
+FD004,overall,16,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.15568116420695488
+FD004,overall,17,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.15370898457421137
+FD004,mid-life (RUL > 80),1,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.1922092133716274
+FD004,mid-life (RUL > 80),2,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.1912137496834091
+FD004,mid-life (RUL > 80),3,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.17608378047297998
+FD004,mid-life (RUL > 80),4,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.17591455653019009
+FD004,mid-life (RUL > 80),5,sensor_9,Nc,Physical core speed,rpm,Core,0.172628804255377
+FD004,mid-life (RUL > 80),6,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.16772498727062796
+FD004,mid-life (RUL > 80),7,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.16456054358998967
+FD004,mid-life (RUL > 80),8,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.15762059218953528
+FD004,mid-life (RUL > 80),9,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.15707780637291877
+FD004,mid-life (RUL > 80),10,sensor_15,BPR,Bypass ratio,—,Performance,0.15575463055173683
+FD004,mid-life (RUL > 80),11,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.15158374340297195
+FD004,mid-life (RUL > 80),12,sensor_8,Nf,Physical fan speed,rpm,Fan,0.14738088193824794
+FD004,mid-life (RUL > 80),13,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.14423305298305594
+FD004,mid-life (RUL > 80),14,sensor_14,NRc,Corrected core speed,rpm,Core,0.14410390375006493
+FD004,mid-life (RUL > 80),15,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.1419062573913481
+FD004,mid-life (RUL > 80),16,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.13908238667082753
+FD004,mid-life (RUL > 80),17,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.10984390885539518
+FD004,pre-warning (30 < RUL <= 80),1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.2843374851944604
+FD004,pre-warning (30 < RUL <= 80),2,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.2767453738440597
+FD004,pre-warning (30 < RUL <= 80),3,sensor_9,Nc,Physical core speed,rpm,Core,0.2702557325458139
+FD004,pre-warning (30 < RUL <= 80),4,sensor_15,BPR,Bypass ratio,—,Performance,0.23936625043414916
+FD004,pre-warning (30 < RUL <= 80),5,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.22657154795762266
+FD004,pre-warning (30 < RUL <= 80),6,sensor_8,Nf,Physical fan speed,rpm,Fan,0.2229323749751954
+FD004,pre-warning (30 < RUL <= 80),7,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.22151918404021803
+FD004,pre-warning (30 < RUL <= 80),8,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.2007655002632128
+FD004,pre-warning (30 < RUL <= 80),9,sensor_14,NRc,Corrected core speed,rpm,Core,0.19695457883924883
+FD004,pre-warning (30 < RUL <= 80),10,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.18886058632111483
+FD004,pre-warning (30 < RUL <= 80),11,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.18562444879691153
+FD004,pre-warning (30 < RUL <= 80),12,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.18360838578789848
+FD004,pre-warning (30 < RUL <= 80),13,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.1796746585411678
+FD004,pre-warning (30 < RUL <= 80),14,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.178043955626982
+FD004,pre-warning (30 < RUL <= 80),15,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.17801147601215653
+FD004,pre-warning (30 < RUL <= 80),16,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.1584439068151851
+FD004,pre-warning (30 < RUL <= 80),17,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.15115167327974216
+FD004,warning zone (RUL <= 30),1,sensor_16,farB,Burner fuel-air ratio,—,Combustor,0.5061568150527467
+FD004,warning zone (RUL <= 30),2,sensor_9,Nc,Physical core speed,rpm,Core,0.44869871357636887
+FD004,warning zone (RUL <= 30),3,sensor_13,NRf,Corrected fan speed,rpm,Fan,0.38484505646045347
+FD004,warning zone (RUL <= 30),4,sensor_7,P30,HPC outlet total pressure,psia,HPC,0.38189649021174493
+FD004,warning zone (RUL <= 30),5,sensor_8,Nf,Physical fan speed,rpm,Fan,0.3766794945040601
+FD004,warning zone (RUL <= 30),6,sensor_15,BPR,Bypass ratio,—,Performance,0.35603207404519366
+FD004,warning zone (RUL <= 30),7,sensor_11,Ps30,HPC outlet static pressure,psia,HPC,0.34009128600637717
+FD004,warning zone (RUL <= 30),8,sensor_4,T50,LPT outlet total temperature,°R,LPT,0.32786055418161525
+FD004,warning zone (RUL <= 30),9,sensor_10,epr,Engine pressure ratio (P50/P2),—,Performance,0.3163320693436998
+FD004,warning zone (RUL <= 30),10,sensor_14,NRc,Corrected core speed,rpm,Core,0.3137932916493614
+FD004,warning zone (RUL <= 30),11,sensor_12,phi,Fuel-flow / Ps30 ratio,pps/psia,Combustor,0.30029877697403795
+FD004,warning zone (RUL <= 30),12,sensor_21,W32,LPT coolant bleed,lbm/s,LPT,0.2967639832436743
+FD004,warning zone (RUL <= 30),13,sensor_17,htBleed,Bleed enthalpy,—,HPC,0.26070947585692916
+FD004,warning zone (RUL <= 30),14,sensor_20,W31,HPT coolant bleed,lbm/s,HPT,0.23050626230816754
+FD004,warning zone (RUL <= 30),15,sensor_2,T24,LPC outlet total temperature,°R,LPC,0.22819800131660828
+FD004,warning zone (RUL <= 30),16,sensor_3,T30,HPC outlet total temperature,°R,HPC,0.22726609278735824
+FD004,warning zone (RUL <= 30),17,sensor_6,P15,Bypass-duct total pressure,psia,Fan,0.14478552453694815
