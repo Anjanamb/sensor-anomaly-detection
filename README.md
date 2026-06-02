@@ -13,9 +13,9 @@
 
 Jet engines are expensive. When one fails unexpectedly, the cost is enormous — a grounded aircraft, an emergency repair, sometimes a safety incident. The goal of *predictive maintenance* is to spot the warning signs early, while the engine is still in service, so it can be pulled for inspection on the operator's schedule rather than the engine's.
 
-This project takes sensor recordings from **100 simulated jet engines** (NASA's C-MAPSS dataset) and builds three different "watchdog" models that learn what a *healthy* engine looks like — temperature, pressure, fuel flow, fan speed, and so on. Once trained, each watchdog raises an alarm when readings start drifting away from healthy patterns, which usually happens **30+ cycles before failure**.
+This project takes sensor recordings from **100 simulated jet engines** (NASA's C-MAPSS dataset) and builds five different "watchdog" models that learn what a *healthy* engine looks like — temperature, pressure, fuel flow, fan speed, and so on. Once trained, each watchdog raises an alarm when readings start drifting away from healthy patterns, which usually happens **30+ cycles before failure**.
 
-You can play with all three models live in the dashboard — pick an engine, pick a model, watch the anomaly score climb as the engine degrades, and (for the best-performing model) ask *why* a given moment was flagged.
+You can play with all models live in the dashboard — pick an engine, pick a model, watch the anomaly score climb as the engine degrades, and (for the best-performing model) ask *why* a given moment was flagged.
 
 ---
 
@@ -25,13 +25,17 @@ You can play with all three models live in the dashboard — pick an engine, pic
 flowchart LR
     A[Raw sensor data<br/>21 channels<br/>100 engines] --> B[Preprocessing<br/>drop dead channels<br/>normalise]
     B --> C[Feature engineering<br/>15 → 184 features<br/>rolling stats, EWMA, lag, skew]
-    C --> D{Three<br/>detectors}
+    C --> D{Five<br/>detectors}
     D --> E[Isolation Forest<br/>F1 = 0.777]
     D --> F[One-Class SVM<br/>F1 = 0.681]
-    D --> G[Autoencoder<br/>F1 = 0.415]
+    D --> G[Autoencoder<br/>F1 = 0.465]
+    D --> G2[LSTM AE<br/>F1 = 0.416]
+    D --> G3[Transformer AE<br/>F1 = 0.439]
     E --> H[Streamlit Dashboard]
     F --> H
     G --> H
+    G2 --> H
+    G3 --> H
     E --> I[SHAP explanations<br/>'why was this flagged?']
     I --> H
 ```
@@ -40,7 +44,7 @@ Each block is a small, testable module. The dashboard is what a maintenance engi
 
 ---
 
-## What the results look like
+## Results at a glance
 
 All five detectors are trained on *healthy* engine data only. They never see failures during training — so the alarm they raise on degraded readings is a true "this doesn't look normal" signal, not a memorised pattern.
 
@@ -52,13 +56,116 @@ All five detectors are trained on *healthy* engine data only. They never see fai
 | Transformer Autoencoder | 0.439 | 0.762 | **0.518** | 0.454 | 0.424 |
 | LSTM Autoencoder | 0.416 | 0.674 | 0.239 | 0.311 | 0.627 |
 
-*Evaluated on a held-out set of 20 engines (4,291 cycles for IF / SVM / feedforward AE; 3,691 windows for the sequence models since the first 29 cycles of each engine drop out). The Isolation Forest and One-Class SVM are deterministic (seeded); the three autoencoders are not seeded across PyTorch's stochastic layers, so their numbers can shift by ±1–2 F1 points on a retrain. None of the deep models are the headline detector — see "Sequence models on C-MAPSS" below for what they actually prove.*
+**Reading the numbers:** F1 balances *precision* (when the model says "alarm", how often is it right?) and *recall* (of all the real problems, how many does it catch?). 0.777 means the Isolation Forest catches ~83% of degrading engines while only ~27% of its alarms are false. AUC-ROC of 0.957 means the model is very good at *ranking* — the worst engines almost always score higher than the healthy ones. On the threshold-free **AUC-PR** metric the **Transformer leads all deep models (0.518)**.
 
-**Reading the numbers:** F1 balances *precision* (when the model says "alarm", how often is it right?) and *recall* (of all the real problems, how many does it catch?). 0.777 means the Isolation Forest catches ~83% of degrading engines while only ~27% of its alarms are false. AUC-ROC of 0.957 means the model is very good at *ranking* — the worst engines almost always score higher than the healthy ones. **AUC-PR** is the same idea but tailored for imbalanced data and is the cleanest threshold-free metric here — on AUC-PR the **Transformer leads all deep models (0.518)**, even though the feedforward AE happened to win the F1 race this run (run-to-run variance from unseeded training).
+<details>
+<summary><b>Evaluation details — splits, determinism, run-to-run variance</b></summary>
+<br>
+
+*Evaluated on a held-out set of 20 engines (4,291 cycles for IF / SVM / feedforward AE; 3,691 windows for the sequence models since the first 29 cycles of each engine drop out). The Isolation Forest and One-Class SVM are deterministic (seeded); the three autoencoders are not seeded across PyTorch's stochastic layers, so their numbers can shift by ±1–2 F1 points on a retrain. None of the deep models are the headline detector — see the pipeline section below for what they actually prove.*
+
+</details>
 
 ---
 
-## The dataset, in two minutes
+## Power BI executive dashboard
+
+The Streamlit app is the **live interactive demo**; the Power BI dashboard is the **stakeholder-style report** you'd actually share in a maintenance ops review — pre-aggregated, paginated, with KPIs up top. Same data, complementary surface.
+
+| Page | Purpose |
+|---|---|
+| 1 — Executive Summary | KPI cards (engine count, anomaly rate, top model F1), model comparison bar, subset slicer |
+| 2 — Engine Fleet | Scatter of `max_cycle` vs anomaly rate, lifetime buckets, drill-through to single engine |
+| 3 — Sensor Diagnostics | Top-10 sensor SHAP bar (subsystem-coloured), subsystem treemap, RUL-bucket filter |
+| 4 — Single Engine Drill-Through | Anomaly-score timeline with threshold reference line, sensor sparklines per cycle |
+
+The assembled file is at [bi/dashboard.pbix](bi/dashboard.pbix) — downloadable and openable in Power BI Desktop (free, Windows). The dashboard consumes five CSVs generated by `python bi/build_data.py`; build instructions, data model, and DAX measures live in [bi/BUILD_GUIDE.md](bi/BUILD_GUIDE.md).
+
+### Page 1 — Executive Summary
+
+![Executive Summary](bi/screenshots/page_1.png)
+
+### Page 2 — Engine Fleet
+
+![Engine Fleet](bi/screenshots/page_2.png)
+
+### Page 3 — Sensor Diagnostics
+
+![Sensor Diagnostics](bi/screenshots/page_3.png)
+
+### Page 4 — Single Engine Drill-Through
+
+![Single Engine](bi/screenshots/page_4.png)
+
+---
+
+## Feature importance findings — what the model actually pays attention to
+
+The dashboard has a **Global Feature Importance** panel that aggregates SHAP attributions across the whole held-out test set (per subset, cached). Three findings from the FD001 analysis ([notebook 07](notebooks/07_feature_importance.ipynb)):
+
+### 1. The top sensor is downstream of the fault, not at it
+
+| Rank | Sensor | Subsystem | Σ \|SHAP\| |
+|---|---|---|---|
+| 1 | **P15** — Bypass-duct total pressure | **Fan** | 0.285 |
+| 2 | NRc — Corrected core speed | Core | 0.236 |
+| 3 | BPR — Bypass ratio | Performance | 0.225 |
+| 4 | T50 — LPT outlet temperature | LPT | 0.224 |
+| 5 | W32 — LPT coolant bleed | LPT | 0.218 |
+| 6 | T30 — HPC outlet temperature | HPC | 0.212 |
+| 7 | phi — Fuel-flow / Ps30 | Combustor | 0.207 |
+| 8 | Ps30 — HPC outlet static pressure | HPC | 0.207 |
+| 9 | NRf — Corrected fan speed | Fan | 0.205 |
+| 10 | htBleed — Bleed enthalpy | HPC | 0.200 |
+
+FD001's only fault mode is **HPC degradation**, so the obvious expectation is that the top sensor sits at the HPC. It doesn't. The single most informative feature is **P15 (bypass-duct total pressure)** in the Fan section. The model is reading HPC degradation through the *airflow redistribution* it causes: when the HPC loses efficiency, the fan/core balance shifts and bypass-duct pressure picks it up before T30 or Ps30 (the direct HPC sensors) drift much. Aggregated by subsystem, HPC still leads at 25.9% (4 sensors), with Fan a close second at 21.8% (3 sensors).
+
+### 2. Drift beats volatility beats distribution shape — but engineered always beats raw
+
+Feature-family ranking (share of total |SHAP|):
+
+| Family | Share | Mean signed SHAP |
+|---|---|---|
+| **Rolling mean** | 19.8% | +0.180 (predominantly anomaly-pushing) |
+| Rolling std | 16.6% | -0.010 (mixed direction) |
+| Diff (k-cycle change) | 15.7% | -0.006 |
+| Lag | 12.0% | +0.096 |
+| EWMA | 10.8% | +0.110 |
+| Raw sensor value | 8.6% | +0.074 |
+| Kurtosis | 8.6% | -0.023 |
+| Skewness | 7.9% | -0.012 |
+
+Engineered features clearly beat raw values (raw is bottom of the pack — validating the feature-engineering work). Rolling mean is the most *directional* signal — its signed SHAP is strongly positive while the others sit near zero — which says drift features are the ones reliably pushing the model toward anomaly, while volatility / diff features push both directions depending on the engine.
+
+### 3. The model uses different sensors at different lifecycle stages
+
+Top sensors' |SHAP| across three RUL buckets:
+
+| Sensor | Mid-life (RUL > 80) | Pre-warning (30 < RUL ≤ 80) | Warning zone (RUL ≤ 30) |
+|---|---|---|---|
+| **P15** (Fan) | **0.328** | 0.241 | **0.173** ↓ |
+| NRc (Core) | 0.191 | 0.236 | **0.429** ↑ |
+| BPR (Performance) | 0.190 | 0.210 | **0.398** ↑ |
+| T50 (LPT) | 0.170 | 0.223 | **0.457** ↑ |
+| W32 (LPT) | 0.193 | 0.200 | 0.353 |
+| T30 (HPC) | 0.204 | 0.190 | 0.280 |
+
+This is the sharpest finding. **P15 is an early indicator** — its importance drops 47% from mid-life to the warning zone (0.328 → 0.173). **T50, NRc, BPR are late indicators** — their importance rises 2–3× as failure approaches; T50 alone jumps 2.7× (0.170 → 0.457). The IF is implicitly learning a temporal progression: bypass-duct pressure drifts first; LPT temperature, core speed, and bypass ratio ramp up later. That's exactly the kind of mechanistic story SHAP attribution gives you that raw F1 numbers can't.
+
+<details>
+<summary><b>Cross-subset: FD004 picks up different signals</b></summary>
+<br>
+
+The IF on FD004 (six operating regimes + two fault modes) reranks meaningfully. Five sensors stay in both subsets' top-10 (BPR, T50, W32, Ps30, htBleed — the robust drivers). Five drop out from FD001 (P15, NRc, T30, phi, NRf) and five new ones appear on FD004 (P30, farB, Nc, epr, Nf). Notably the **"corrected" speeds (NRc, NRf) lose ground to their physical counterparts (Nc, Nf)** on FD004 because per-regime normalisation already removes the operating-condition variance; raw RPM carries more useful information once the regime adjustment is upstream. Also, sensors that were *constant on FD001* (epr, farB) become informative on FD004 because they actually vary across the six operating regimes.
+
+See [notebook 07](notebooks/07_feature_importance.ipynb) for the full analysis, including the side-by-side FD001 vs FD004 ranking table and the lifecycle-pattern visualisation.
+
+</details>
+
+---
+
+<details>
+<summary><h2 style="display:inline">The dataset, in two minutes</h2></summary>
 
 **NASA C-MAPSS** is a simulation of turbofan jet engines that NASA released for public research. Each engine starts perfectly healthy, runs for a few hundred operating cycles, and gradually degrades until it fails. Throughout its life, **21 sensors** record physical measurements at each cycle.
 
@@ -91,9 +198,12 @@ We label everything in the last **30 cycles before failure** as "anomalous". Thi
 
 *Source: [NASA Prognostics Data Repository](https://data.nasa.gov/dataset/cmapss-jet-engine-simulated-data). Reference: Saxena et al., "Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation", PHM08.*
 
+</details>
+
 ---
 
-## How the pipeline works, step by step
+<details>
+<summary><h2 style="display:inline">How the pipeline works, step by step</h2></summary>
 
 ### Step 1 — Cleaning
 
@@ -133,9 +243,9 @@ Each family captures a different kind of degradation signal:
 
 Everything is computed **per engine**, so engine 1's running average never leaks into engine 2's features. See [src/feature_engineering.py](src/feature_engineering.py).
 
-### Step 3 — Three different detectors, three different ideas of "abnormal"
+### Step 3 — Five different detectors, five different ideas of "abnormal"
 
-Why three models? They each define "abnormal" differently, and seeing where they agree (and disagree) is more informative than any single model alone.
+Why five models? They each define "abnormal" differently, and seeing where they agree (and disagree) is more informative than any single model alone.
 
 #### Isolation Forest — *the winner*
 
@@ -246,9 +356,46 @@ SHAP attributions are **model-specific** — they explain the chosen detector, n
 
 The narrative describes *what's pushing the model's score upward*, regardless of whether that score actually crossed the alarm threshold. It answers "what is the model paying attention to?" — not "is this an anomaly?". The threshold (and the Model Comparison panel) answer the latter.
 
+</details>
+
 ---
 
-## What's in the project
+<details>
+<summary><h2 style="display:inline">Cross-subset comparison (FD001 / FD002 / FD003 / FD004)</h2></summary>
+
+The dashboard supports all four C-MAPSS subsets via a subset selector in the sidebar. Each one trains its own copy of all 5 detectors and ships with subset-specific preprocessing artefacts (scaler, kept-sensor list, and KMeans + per-regime scalers for the multi-regime subsets).
+
+| Subset | Operating regimes | Fault modes |
+|---|---|---|
+| FD001 | 1 | 1 (HPC degradation) |
+| FD002 | **6** | 1 |
+| FD003 | 1 | **2** (HPC + Fan) |
+| FD004 | **6** | **2** |
+
+[notebooks/06_fd_subset_comparison.ipynb](notebooks/06_fd_subset_comparison.ipynb) trains all five detectors on each subset with the same hyperparameters (multi-regime subsets get per-regime sensor normalisation via KMeans(k=6) before feature engineering). [scripts/train_subsets.py](scripts/train_subsets.py) is the production version that persists the artefacts under `models/<SUBSET>/` for the dashboard to load. ~15–25 minutes end-to-end on a mid-range desktop GPU. F1 results:
+
+| Model | FD001 | FD002 | FD003 | FD004 |
+|---|---|---|---|---|
+| **Isolation Forest** | **0.777** | **0.830** | 0.665 | **0.762** |
+| One-Class SVM | 0.681 | 0.732 | 0.670 | 0.737 |
+| Transformer AE | 0.489 | 0.654 | 0.592 | 0.711 |
+| LSTM AE | 0.356 | 0.702 | 0.486 | 0.714 |
+| Autoencoder (feedforward) | 0.468 | 0.542 | **0.686** | 0.562 |
+
+Three findings worth carrying:
+
+1. **The IF wins 3 of 4 subsets but loses FD003 to the feedforward Autoencoder** (0.665 vs 0.686). Mechanism: reconstruction-error AEs flag *any* deviation from healthy, so two fault modes (HPC + Fan) light up uniformly; the IF's tree splits need to carve two separate anomaly regions and with only ~100 train engines the splits are noisier.
+2. **Sequence models specifically benefit from multi-regime data.** The Transformer's gap to the IF shrinks from -0.29 (FD001) to -0.05 (FD004); the LSTM closes from -0.42 to -0.05. On FD003 (single regime, multi-fault) sequence models *don't* improve much — multi-fault alone doesn't need attention over time.
+3. **The One-Class SVM is the dark-horse all-rounder.** Stays within ~0.1 F1 of the IF across every subset and beats it on FD003. The kernel boundary generalises consistently.
+
+The headline shifts from "*IF dominates*" (FD001-only view) to "*the right detector depends on which kind of complexity you have*" — a much stronger, more defensible story.
+
+</details>
+
+---
+
+<details>
+<summary><h2 style="display:inline">Project structure</h2></summary>
 
 ```
 sensor-anomaly-detection/
@@ -297,9 +444,12 @@ sensor-anomaly-detection/
 └── README.md
 ```
 
+</details>
+
 ---
 
-## Try it yourself
+<details>
+<summary><h2 style="display:inline">Try it yourself</h2></summary>
 
 ### 1. Clone and set up
 
@@ -345,153 +495,7 @@ Open the printed URL (usually `http://localhost:8501`), pick a **C-MAPSS subset*
 pytest tests/ -v
 ```
 
----
-
-## Power BI executive dashboard
-
-The Streamlit app is the **live interactive demo**; the Power BI dashboard is the **stakeholder-style report** you'd actually share in a maintenance ops review — pre-aggregated, paginated, with KPIs up top. Same data, complementary surface.
-
-| Page | Purpose |
-|---|---|
-| 1 — Executive Summary | KPI cards (engine count, anomaly rate, top model F1), model comparison bar, subset slicer |
-| 2 — Engine Fleet | Scatter of `max_cycle` vs anomaly count, severity buckets, drill-through to single engine |
-| 3 — Sensor Diagnostics | Top-10 sensor SHAP bar (subsystem-coloured), subsystem treemap, RUL-bucket filter |
-| 4 — Single Engine Drill-Through | Anomaly-score timeline, sensor sparklines per cycle |
-
-The dashboard consumes five CSVs generated by `python bi/build_data.py` (~12 min for all four subsets). The CSVs are committed under [bi/data/](bi/data/) so the dashboard rebuilds without re-running the model pipeline. Build instructions, data model, and DAX measures live in [bi/BUILD_GUIDE.md](bi/BUILD_GUIDE.md). The assembled file is at [bi/dashboard.pbix](bi/dashboard.pbix) — downloadable and openable in Power BI Desktop (free, Windows).
-
-### Page 1 — Executive Summary
-
-![Executive Summary](bi/screenshots/page_1.png)
-
-### Page 2 — Engine Fleet
-
-![Engine Fleet](bi/screenshots/page_2.png)
-
-### Page 3 — Sensor Diagnostics
-
-![Sensor Diagnostics](bi/screenshots/page_3.png)
-
-### Page 4 — Single Engine Drill-Through
-
-![Single Engine](bi/screenshots/page_4.png)
-
----
-
-## Feature importance findings — what the model actually pays attention to
-
-The dashboard has a **Global Feature Importance** panel that aggregates SHAP attributions across the whole held-out test set (per subset, cached). Three findings from the FD001 analysis ([notebook 07](notebooks/07_feature_importance.ipynb)):
-
-### 1. The top sensor is downstream of the fault, not at it
-
-| Rank | Sensor | Subsystem | Σ \|SHAP\| |
-|---|---|---|---|
-| 1 | **P15** — Bypass-duct total pressure | **Fan** | 0.285 |
-| 2 | NRc — Corrected core speed | Core | 0.236 |
-| 3 | BPR — Bypass ratio | Performance | 0.225 |
-| 4 | T50 — LPT outlet temperature | LPT | 0.224 |
-| 5 | W32 — LPT coolant bleed | LPT | 0.218 |
-| 6 | T30 — HPC outlet temperature | HPC | 0.212 |
-| 7 | phi — Fuel-flow / Ps30 | Combustor | 0.207 |
-| 8 | Ps30 — HPC outlet static pressure | HPC | 0.207 |
-| 9 | NRf — Corrected fan speed | Fan | 0.205 |
-| 10 | htBleed — Bleed enthalpy | HPC | 0.200 |
-
-FD001's only fault mode is **HPC degradation**, so the obvious expectation is that the top sensor sits at the HPC. It doesn't. The single most informative feature is **P15 (bypass-duct total pressure)** in the Fan section. The model is reading HPC degradation through the *airflow redistribution* it causes: when the HPC loses efficiency, the fan/core balance shifts and bypass-duct pressure picks it up before T30 or Ps30 (the direct HPC sensors) drift much. Aggregated by subsystem, HPC still leads at 25.9% (4 sensors), with Fan a close second at 21.8% (3 sensors).
-
-### 2. Drift beats volatility beats distribution shape — but engineered always beats raw
-
-Feature-family ranking (share of total |SHAP|):
-
-| Family | Share | Mean signed SHAP |
-|---|---|---|
-| **Rolling mean** | 19.8% | +0.180 (predominantly anomaly-pushing) |
-| Rolling std | 16.6% | -0.010 (mixed direction) |
-| Diff (k-cycle change) | 15.7% | -0.006 |
-| Lag | 12.0% | +0.096 |
-| EWMA | 10.8% | +0.110 |
-| Raw sensor value | 8.6% | +0.074 |
-| Kurtosis | 8.6% | -0.023 |
-| Skewness | 7.9% | -0.012 |
-
-Engineered features clearly beat raw values (raw is bottom of the pack — validating the feature-engineering work). Rolling mean is the most *directional* signal — its signed SHAP is strongly positive while the others sit near zero — which says drift features are the ones reliably pushing the model toward anomaly, while volatility / diff features push both directions depending on the engine.
-
-### 3. The model uses different sensors at different lifecycle stages
-
-Top sensors' |SHAP| across three RUL buckets:
-
-| Sensor | Mid-life (RUL > 80) | Pre-warning (30 < RUL ≤ 80) | Warning zone (RUL ≤ 30) |
-|---|---|---|---|
-| **P15** (Fan) | **0.328** | 0.241 | **0.173** ↓ |
-| NRc (Core) | 0.191 | 0.236 | **0.429** ↑ |
-| BPR (Performance) | 0.190 | 0.210 | **0.398** ↑ |
-| T50 (LPT) | 0.170 | 0.223 | **0.457** ↑ |
-| W32 (LPT) | 0.193 | 0.200 | 0.353 |
-| T30 (HPC) | 0.204 | 0.190 | 0.280 |
-
-This is the sharpest finding. **P15 is an early indicator** — its importance drops 47% from mid-life to the warning zone (0.328 → 0.173). **T50, NRc, BPR are late indicators** — their importance rises 2–3× as failure approaches; T50 alone jumps 2.7× (0.170 → 0.457). The IF is implicitly learning a temporal progression: bypass-duct pressure drifts first; LPT temperature, core speed, and bypass ratio ramp up later. That's exactly the kind of mechanistic story SHAP attribution gives you that raw F1 numbers can't.
-
-### Cross-subset: FD004 picks up different signals
-
-The IF on FD004 (six operating regimes + two fault modes) reranks meaningfully. Five sensors stay in both subsets' top-10 (BPR, T50, W32, Ps30, htBleed — the robust drivers). Five drop out from FD001 (P15, NRc, T30, phi, NRf) and five new ones appear on FD004 (P30, farB, Nc, epr, Nf). Notably the **"corrected" speeds (NRc, NRf) lose ground to their physical counterparts (Nc, Nf)** on FD004 because per-regime normalisation already removes the operating-condition variance; raw RPM carries more useful information once the regime adjustment is upstream. Also, sensors that were *constant on FD001* (epr, farB) become informative on FD004 because they actually vary across the six operating regimes.
-
-See [notebook 07](notebooks/07_feature_importance.ipynb) for the full analysis, including the side-by-side FD001 vs FD004 ranking table and the lifecycle-pattern visualisation.
-
----
-
-## Cross-subset comparison (FD001 / FD002 / FD003 / FD004)
-
-The dashboard supports all four C-MAPSS subsets via a subset selector in the sidebar. Each one trains its own copy of all 5 detectors and ships with subset-specific preprocessing artefacts (scaler, kept-sensor list, and KMeans + per-regime scalers for the multi-regime subsets).
-
-| Subset | Operating regimes | Fault modes |
-|---|---|---|
-| FD001 | 1 | 1 (HPC degradation) |
-| FD002 | **6** | 1 |
-| FD003 | 1 | **2** (HPC + Fan) |
-| FD004 | **6** | **2** |
-
-[notebooks/06_fd_subset_comparison.ipynb](notebooks/06_fd_subset_comparison.ipynb) trains all five detectors on each subset with the same hyperparameters (multi-regime subsets get per-regime sensor normalisation via KMeans(k=6) before feature engineering). [scripts/train_subsets.py](scripts/train_subsets.py) is the production version that persists the artefacts under `models/<SUBSET>/` for the dashboard to load. ~15–25 minutes end-to-end on a mid-range desktop GPU. F1 results:
-
-| Model | FD001 | FD002 | FD003 | FD004 |
-|---|---|---|---|---|
-| **Isolation Forest** | **0.777** | **0.830** | 0.665 | **0.762** |
-| One-Class SVM | 0.681 | 0.732 | 0.670 | 0.737 |
-| Transformer AE | 0.489 | 0.654 | 0.592 | 0.711 |
-| LSTM AE | 0.356 | 0.702 | 0.486 | 0.714 |
-| Autoencoder (feedforward) | 0.468 | 0.542 | **0.686** | 0.562 |
-
-Three findings worth carrying:
-
-1. **The IF wins 3 of 4 subsets but loses FD003 to the feedforward Autoencoder** (0.665 vs 0.686). Mechanism: reconstruction-error AEs flag *any* deviation from healthy, so two fault modes (HPC + Fan) light up uniformly; the IF's tree splits need to carve two separate anomaly regions and with only ~100 train engines the splits are noisier.
-2. **Sequence models specifically benefit from multi-regime data.** The Transformer's gap to the IF shrinks from -0.29 (FD001) to -0.05 (FD004); the LSTM closes from -0.42 to -0.05. On FD003 (single regime, multi-fault) sequence models *don't* improve much — multi-fault alone doesn't need attention over time.
-3. **The One-Class SVM is the dark-horse all-rounder.** Stays within ~0.1 F1 of the IF across every subset and beats it on FD003. The kernel boundary generalises consistently.
-
-The headline shifts from "*IF dominates*" (FD001-only view) to "*the right detector depends on which kind of complexity you have*" — a much stronger, more defensible story.
-
----
-
-## Limitations & next steps
-
-- **Binary anomaly label and no RUL prediction.** The `anomaly` target is generated by a hard `RUL ≤ 30` cutoff applied *for evaluation only* — the models themselves never see RUL; they detect deviations from healthy patterns unsupervised. Two improvements stack on top: (1) the cutoff is a domain decision and should ideally be configurable per maintenance team; (2) adding a separate **RUL regression** head would let the dashboard surface a meaningful "estimated remaining life" KPI (the current dashboard intentionally omits this because training data runs to failure, so any naive estimate from cycle counts is trivially zero).
-- **No online learning.** Models are trained once and frozen. A real deployment would need to update them as new flight data arrives.
-- **Single-model SHAP.** SHAP attributions are currently produced only for the Isolation Forest. Adding `KernelExplainer` (One-Class SVM) and `DeepExplainer` (Autoencoder) would unlock cross-model attribution comparison.
-
----
-
-## Tech stack
-
-| Category | Tools |
-|----------|-------|
-| **ML / Data** | Python, PyTorch, scikit-learn, pandas, NumPy, SciPy |
-| **Explainability** | SHAP |
-| **Visualisation** | Plotly, Matplotlib, Seaborn |
-| **Dashboard** | Streamlit |
-| **Testing** | pytest |
-| **Deployment** | Docker, Streamlit Cloud |
-
----
-
-## Docker
+### Docker alternative
 
 ```bash
 docker build -t sensor-anomaly .
@@ -499,6 +503,36 @@ docker run -p 8501:8501 sensor-anomaly
 ```
 
 Then open `http://localhost:8501`.
+
+</details>
+
+---
+
+<details>
+<summary><h2 style="display:inline">Limitations & next steps</h2></summary>
+
+- **Binary anomaly label and no RUL prediction.** The `anomaly` target is generated by a hard `RUL ≤ 30` cutoff applied *for evaluation only* — the models themselves never see RUL; they detect deviations from healthy patterns unsupervised. Two improvements stack on top: (1) the cutoff is a domain decision and should ideally be configurable per maintenance team; (2) adding a separate **RUL regression** head would let the dashboard surface a meaningful "estimated remaining life" KPI (the current dashboard intentionally omits this because training data runs to failure, so any naive estimate from cycle counts is trivially zero).
+- **No online learning.** Models are trained once and frozen. A real deployment would need to update them as new flight data arrives.
+- **Single-model SHAP.** SHAP attributions are currently produced only for the Isolation Forest. Adding `KernelExplainer` (One-Class SVM) and `DeepExplainer` (Autoencoder) would unlock cross-model attribution comparison.
+- **SHAP summary plots only.** Current explainability uses bar-style global aggregation. Dependence plots, beeswarm summaries, and waterfall per-prediction views (all stock SHAP visuals) would add depth — see "Tech stack" for what's planned.
+
+</details>
+
+---
+
+<details>
+<summary><h2 style="display:inline">Tech stack</h2></summary>
+
+| Category | Tools |
+|----------|-------|
+| **ML / Data** | Python, PyTorch, scikit-learn, pandas, NumPy, SciPy |
+| **Explainability** | SHAP (TreeExplainer) |
+| **Visualisation** | Plotly, Matplotlib, Seaborn |
+| **Dashboard** | Streamlit, Power BI Desktop |
+| **Testing** | pytest |
+| **Deployment** | Docker, Streamlit Cloud |
+
+</details>
 
 ---
 
