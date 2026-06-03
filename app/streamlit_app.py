@@ -828,23 +828,29 @@ def main():
             X_test_mat = results['X_test']
             feat_names = results['feature_names']
             _plt.style.use('dark_background')
-            fig_bee, ax_bee = _plt.subplots(figsize=(9, 6))
+            # Render at a fixed, reasonable size — Streamlit's 'stretch'
+            # mode upscales matplotlib output to full container width,
+            # which makes the SHAP labels grow to ~40pt and dominates the
+            # page. A 7x4.5 figure displayed at content size is readable.
+            _plt.figure(figsize=(7, 4.5))
             _shap_lib.summary_plot(
                 shap_vals, X_test_mat, feature_names=feat_names,
-                max_display=15, show=False, plot_size=None,
+                max_display=12, show=False, plot_size=None,
             )
             fig_bee = _plt.gcf()
             fig_bee.patch.set_facecolor('#0e1117')
             for ax in fig_bee.axes:
                 ax.set_facecolor('#0e1117')
-                ax.tick_params(colors='white')
+                ax.tick_params(colors='white', labelsize=8)
                 for spine in ax.spines.values():
                     spine.set_edgecolor('#555')
                 if ax.get_xlabel():
-                    ax.set_xlabel(ax.get_xlabel(), color='white')
+                    ax.set_xlabel(ax.get_xlabel(), color='white', fontsize=9)
                 if ax.get_ylabel():
-                    ax.set_ylabel(ax.get_ylabel(), color='white')
-            st.pyplot(fig_bee, width='stretch')
+                    ax.set_ylabel(ax.get_ylabel(), color='white', fontsize=9)
+            _bee_l, _bee_m, _bee_r = st.columns([1, 4, 1])
+            with _bee_m:
+                st.pyplot(fig_bee, width='content')
             _plt.close('all')
 
         # ── Dependence plots ───────────────────────────────────────────
@@ -880,25 +886,28 @@ def main():
                     top_feat = sensor_feats.iloc[0]['feature']
                     feat_idx = feat_names.index(top_feat)
                     _plt.style.use('dark_background')
+                    _plt.figure(figsize=(6, 4))
                     _shap_lib.dependence_plot(
                         feat_idx, shap_vals, X_test_mat,
                         feature_names=feat_names, show=False,
                     )
                     fig_dep = _plt.gcf()
-                    fig_dep.set_size_inches(8, 5)
+                    fig_dep.set_size_inches(6, 4)
                     fig_dep.patch.set_facecolor('#0e1117')
                     for ax in fig_dep.axes:
                         ax.set_facecolor('#0e1117')
-                        ax.tick_params(colors='white')
+                        ax.tick_params(colors='white', labelsize=8)
                         for spine in ax.spines.values():
                             spine.set_edgecolor('#555')
                         if ax.get_xlabel():
-                            ax.set_xlabel(ax.get_xlabel(), color='white')
+                            ax.set_xlabel(ax.get_xlabel(), color='white', fontsize=9)
                         if ax.get_ylabel():
-                            ax.set_ylabel(ax.get_ylabel(), color='white')
+                            ax.set_ylabel(ax.get_ylabel(), color='white', fontsize=9)
                         if ax.get_title():
-                            ax.set_title(ax.get_title(), color='white')
-                    st.pyplot(fig_dep, width='stretch')
+                            ax.set_title(ax.get_title(), color='white', fontsize=10)
+                    _dep_l, _dep_m, _dep_r = st.columns([1, 3, 1])
+                    with _dep_m:
+                        st.pyplot(fig_dep, width='content')
                     _plt.close('all')
                     st.caption(
                         f"Showing **{pretty_feature_label(top_feat)}** "

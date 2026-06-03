@@ -217,6 +217,17 @@ your hypothesis, and report the result.
   attribution and they're not directly comparable. Cross-model SHAP
   agreement on top features is a stronger anomaly signal than
   majority voting on predictions.
+- **Multiple SHAP views answer different questions.** Bar plots rank;
+  beeswarms reveal *spread* and direction per feature; dependence
+  plots expose *threshold effects* and auto-detected interactions.
+  Recruiters who do ML themselves notice when only one view is
+  shown — that flag costs nothing to fix.
+- **Cross-check explainability with a model-agnostic method.**
+  Permutation importance shuffles each feature and measures the F1
+  drop — different mechanism from SHAP entirely. When both rankings
+  agree on the top sensors, that's a credibility argument; when they
+  disagree (a feature high on SHAP but low on permutation), the gap
+  usually reveals a correlated proxy carrying the signal.
 - **Feature engineering doesn't always help.** See notebook 02 C2.
   Don't add a feature unless you can show empirically that it
   improves the metric.
@@ -246,7 +257,8 @@ your hypothesis, and report the result.
 |---|---|---|---|
 | **scikit-learn** | Isolation Forest, One-Class SVM, KMeans, StandardScaler | Battle-tested, deterministic with `random_state`, fast `TreeExplainer` for SHAP | Default contamination=0.05 worked; tuned via F1-optimal threshold post-hoc |
 | **PyTorch** (CUDA 12.6 local, CPU on Cloud) | Feedforward AE, LSTM AE, Transformer AE | Flexibility for custom architectures; `.to(device)` makes GPU/CPU portable | Pin wheel index URL for CUDA build |
-| **SHAP** | Global + per-cycle attribution for IF | `TreeExplainer` is exact and ~100× faster than KernelExplainer | Negate against `score_samples` so positive = pushes toward anomaly |
+| **SHAP** | Global + per-cycle attribution for IF; beeswarm + dependence plots | `TreeExplainer` is exact and ~100× faster than KernelExplainer; beeswarm/dependence are the canonical views recruiters expect | Negate against `score_samples` so positive = pushes toward anomaly |
+| **scikit-learn `permutation_importance`** | Model-agnostic cross-check on the SHAP ranking | Different mechanism (shuffle a feature, measure F1 drop) gives an independent ranking — agreement = credibility, disagreement = informative | Wrap the IF as a `BaseEstimator + ClassifierMixin` so the F1 scorer accepts it |
 | **Streamlit** | Live interactive dashboard | Single-file deploy, simple state model, free Cloud hosting | Cache by subset; defensive imports for optional deps |
 | **Power BI Desktop** | Stakeholder-style executive dashboard | Industry-standard BI tool for non-technical audiences; cleaner KPI/slicer/drillthrough UX than Plotly | Build guide + committed CSVs + screenshots in `bi/` |
 | **pytest** | Unit testing | Fast, simple, all 36 tests run in ~10 s | Includes notebook tests for the analytics work |
