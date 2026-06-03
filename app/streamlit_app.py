@@ -53,10 +53,14 @@ try:
         build_explainer, explain, top_features_for_sample,
         pretty_feature_label, feature_glossary, narrate,
     )
+    import shap as _shap_lib
+    import matplotlib.pyplot as _plt
     _SHAP_IMPORT_ERROR: str | None = None
 except Exception as _e:  # pragma: no cover - environment-dependent
     build_explainer = explain = top_features_for_sample = None  # type: ignore
     pretty_feature_label = feature_glossary = narrate = None  # type: ignore
+    _shap_lib = None  # type: ignore
+    _plt = None  # type: ignore
     _SHAP_IMPORT_ERROR = f"{type(_e).__name__}: {_e}"
 
 # Sensor descriptions are pure data — safe to import unconditionally.
@@ -274,6 +278,11 @@ def compute_global_shap(subset: str):
         'bucket_df': bucket_df,
         'top7_sensors': top7,
         'n_test_rows': X_test.shape[0],
+        # Raw matrices used by beeswarm / dependence plots
+        'shap_values': explanation.shap_values,
+        'X_test': X_test,
+        'feature_names': all_feature_cols,
+        'per_feature': explanation.per_feature,
     }
 
 
@@ -803,6 +812,101 @@ def main():
                     legend=dict(orientation='h', y=-0.2),
                 )
                 st.plotly_chart(fig_b, width='stretch')
+
+        # ── Beeswarm summary plot ──────────────────────────────────────
+        with st.expander(
+            "🐝 Beeswarm — per-feature SHAP distribution across the test set"
+        ):
+            st.caption(
+                "Each dot is one test cycle; X = SHAP value (→ anomaly); "
+                "colour encodes the feature value (red = high, blue = low). "
+                "Reveals direction *and* spread — a tight band near zero is "
+                "an uninformative feature, a wide spread with clean colour "
+                "separation is a strong threshold-driven signal."
+            )
+            shap_vals = results['shap_values']
+            X_test_mat = results['X_test']
+            feat_names = results['feature_names']
+            _plt.style.use('dark_background')
+            fig_bee, ax_bee = _plt.subplots(figsize=(9, 6))
+            _shap_lib.summary_plot(
+                shap_vals, X_test_mat, feature_names=feat_names,
+                max_display=15, show=False, plot_size=None,
+            )
+            fig_bee = _plt.gcf()
+            fig_bee.patch.set_facecolor('#0e1117')
+            for ax in fig_bee.axes:
+                ax.set_facecolor('#0e1117')
+                ax.tick_params(colors='white')
+                for spine in ax.spines.values():
+                    spine.set_edgecolor('#555')
+                if ax.get_xlabel():
+                    ax.set_xlabel(ax.get_xlabel(), color='white')
+                if ax.get_ylabel():
+                    ax.set_ylabel(ax.get_ylabel(), color='white')
+            st.pyplot(fig_bee, width='stretch')
+            _plt.close('all')
+
+        # ── Dependence plots ───────────────────────────────────────────
+        with st.expander(
+            "📈 Dependence plot — does the model respond to a threshold?"
+        ):
+            st.caption(
+                "For one chosen sensor, plot its strongest engineered "
+                "feature's SHAP value (Y) against the feature value itself "
+                "(X). Colour encodes an auto-detected interaction feature. "
+                "A clean monotonic curve = the model learned a threshold; "
+                "scatter with no trend = the feature isn't doing much."
+            )
+            top_for_dep = (
+                per_sensor.head(8)['base_sensor'].tolist()
+                if not per_sensor.empty else []
+            )
+            if top_for_dep:
+                dep_choices = {
+                    f"{s.replace('sensor_', 'S')} · "
+                    f"{SENSOR_TABLE.loc[s, 'symbol'] if s in SENSOR_TABLE.index else s} "
+                    f"({SENSOR_TABLE.loc[s, 'subsystem'] if s in SENSOR_TABLE.index else '?'})"
+                    : s for s in top_for_dep
+                }
+                chosen_label = st.selectbox(
+                    "Sensor", list(dep_choices.keys()), index=0,
+                )
+                chosen_base = dep_choices[chosen_label]
+                # Pick the highest-|SHAP| engineered feature for this sensor
+                per_feat = results['per_feature']
+                sensor_feats = per_feat[per_feat['base_sensor'] == chosen_base]
+                if not sensor_feats.empty:
+                    top_feat = sensor_feats.iloc[0]['feature']
+                    feat_idx = feat_names.index(top_feat)
+                    _plt.style.use('dark_background')
+                    _shap_lib.dependence_plot(
+                        feat_idx, shap_vals, X_test_mat,
+                        feature_names=feat_names, show=False,
+                    )
+                    fig_dep = _plt.gcf()
+                    fig_dep.set_size_inches(8, 5)
+                    fig_dep.patch.set_facecolor('#0e1117')
+                    for ax in fig_dep.axes:
+                        ax.set_facecolor('#0e1117')
+                        ax.tick_params(colors='white')
+                        for spine in ax.spines.values():
+                            spine.set_edgecolor('#555')
+                        if ax.get_xlabel():
+                            ax.set_xlabel(ax.get_xlabel(), color='white')
+                        if ax.get_ylabel():
+                            ax.set_ylabel(ax.get_ylabel(), color='white')
+                        if ax.get_title():
+                            ax.set_title(ax.get_title(), color='white')
+                    st.pyplot(fig_dep, width='stretch')
+                    _plt.close('all')
+                    st.caption(
+                        f"Showing **{pretty_feature_label(top_feat)}** "
+                        f"(`{top_feat}` — the highest-|SHAP| engineered "
+                        f"feature for this sensor)."
+                    )
+                else:
+                    st.info("No engineered features available for this sensor.")
 
     # ── Explainability (Isolation Forest) ───────────────────────────────
     st.markdown("---")
