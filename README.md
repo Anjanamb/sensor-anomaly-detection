@@ -101,7 +101,9 @@ The assembled file is at [bi/dashboard.pbix](bi/dashboard.pbix) — downloadable
 
 ## Feature importance findings — what the model actually pays attention to
 
-The dashboard has a **Global Feature Importance** panel that aggregates SHAP attributions across the whole held-out test set (per subset, cached). Three findings from the FD001 analysis ([notebook 07](notebooks/07_feature_importance.ipynb)):
+The dashboard has a **Global Feature Importance** panel that aggregates SHAP attributions across the whole held-out test set (per subset, cached). Three findings from the FD001 analysis ([notebook 07](notebooks/07_feature_importance.ipynb)).
+
+> **Quick sensor reference** — the symbols below come from NASA's published C-MAPSS spec. **P15** = bypass-duct total pressure (Fan section), **NRc** / **NRf** = corrected core/fan speed, **BPR** = bypass ratio, **T30** / **T50** = HPC outlet and LPT outlet temperature, **Ps30** = HPC outlet static pressure, **W32** = LPT coolant bleed, **phi** = fuel-flow ÷ Ps30 (a combustor signal), **htBleed** = bleed enthalpy. Full table in [src/sensor_descriptions.py](src/sensor_descriptions.py).
 
 ### 1. The top sensor is downstream of the fault, not at it
 
