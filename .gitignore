@@ -28,8 +28,11 @@ data/shap_dependence_top3.png
 # Local working artifacts
 nb-run.log
 
-# Generated feature matrices (rebuilt on demand from notebook 02)
+# Generated ML artefacts (rebuilt on demand from the notebooks)
 data/features_*.csv
+data/scores_*.csv
+data/labels_*.csv
+models/FD004/
 
 # Power BI: cycles.csv is large (~48 MB across all four subsets) and is
 # regenerated locally from `python bi/build_data.py`. The committed .pbix
