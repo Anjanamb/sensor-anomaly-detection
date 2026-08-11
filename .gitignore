@@ -32,6 +32,7 @@ nb-run.log
 data/features_*.csv
 data/scores_*.csv
 data/labels_*.csv
+data/eval_*.csv
 models/FD004/
 
 # Power BI: cycles.csv is large (~48 MB across all four subsets) and is
