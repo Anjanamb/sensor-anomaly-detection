@@ -382,11 +382,13 @@ The story landed cleanly:
 
 - Isolation Forest catches all 249 training engines with a median lead
   time of 210 cycles.
-- DBSCAN catches 90/249, mostly late (median lead 13 cycles), but with
+- DBSCAN catches 90/249, mostly late (median lead 13.5 cycles), but with
   much higher per-flag precision.
-- Every DBSCAN-flagged cycle was also IF-flagged. Zero disagreement in
-  the direction "DBSCAN said yes, IF said no". IF flags many cycles DBSCAN
-  does not, which is IF being more sensitive rather than wrong.
+- Every DBSCAN-flagged *engine* was also IF-flagged (90 of 90). At the
+  cycle level, 614 of 617 DBSCAN-noise cycles were also above the IF
+  threshold (99.5% agreement); only 3 cycles were DBSCAN-only. IF flags
+  many cycles DBSCAN does not, which is IF being more sensitive rather
+  than wrong.
 
 Two very different detection mechanisms confirming each other on the same
 cycles is a much better answer than a single F1 leaderboard, and it took
