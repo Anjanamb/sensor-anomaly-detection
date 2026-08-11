@@ -1,16 +1,17 @@
 """Thin wrappers around the two anomaly detectors used in v2.
 
-Both are unsupervised — they learn only from *healthy* engine cycles (early
+Both are unsupervised. They learn only from healthy engine cycles (early
 in each trajectory) and score any new point by how unlike that healthy
 distribution it looks.
 
 - IsolationForest: tree-based, cheap, produces a continuous anomaly score.
-- DBSCAN:         density-based, labels dense regions as clusters and sparse
-                   points as noise (label -1). Noise is the natural anomaly
-                   label — useful for a very different-looking second opinion.
+- DBSCAN: density-based, labels dense regions as clusters and sparse points
+  as noise (label -1). Noise is the natural anomaly label, useful as a
+  different-looking second opinion.
 
 The two detectors sit side-by-side in the notebooks so the reader can
-compare a scoring approach against a clustering approach on the same features.
+compare a scoring approach against a clustering approach on the same
+features.
 """
 from __future__ import annotations
 
@@ -27,9 +28,9 @@ def fit_isolation_forest(
 ) -> IsolationForest:
     """Train an IsolationForest on a *healthy-only* feature matrix.
 
-    contamination — expected fraction of anomalies in training data. Since we
-      train on healthy cycles, this should be tiny (0.01 – 0.05); leave a
-      small non-zero so the internal offset is well-behaved.
+    contamination: expected fraction of anomalies in training data. Since we
+      train on healthy cycles, this should be tiny (0.01 to 0.05). Leave a
+      small non-zero value so the internal offset is well-behaved.
     """
     model = IsolationForest(
         contamination=contamination,
@@ -55,7 +56,7 @@ def anomaly_score(model: IsolationForest, X) -> np.ndarray:
 def fit_predict_dbscan(X, *, eps: float, min_samples: int) -> np.ndarray:
     """Fit DBSCAN and return cluster labels. -1 == noise == anomaly.
 
-    eps and min_samples need tuning per dataset — see the k-distance plot in
+    eps and min_samples need tuning per dataset. See the k-distance plot in
     ``notebooks/04_train_dbscan.ipynb`` for how we pick them.
     """
     return DBSCAN(eps=eps, min_samples=min_samples, n_jobs=-1).fit_predict(X)

@@ -2,10 +2,10 @@
 
 Each function takes a pandas Series and returns a new Series of the same
 length. Per-engine application is done by the caller using
-``df.groupby("unit")["s2"].transform(lambda s: rolling_mean(s, 5))`` — this
+``df.groupby("unit")["s2"].transform(lambda s: rolling_mean(s, 5))``. This
 keeps the primitives free of dataset-specific knowledge and easy to test.
 
-The *choice* of which primitive to apply to which sensor, with what window,
+The choice of which primitive to apply to which sensor, with what window,
 lives in ``notebooks/02_feature_engineering.ipynb`` alongside the hypothesis
 and validation plot that motivates it.
 """
@@ -21,7 +21,7 @@ def rolling_mean(s: pd.Series, window: int) -> pd.Series:
 
 
 def rolling_std(s: pd.Series, window: int) -> pd.Series:
-    """Rolling window standard deviation. NaN at the first cycle → 0."""
+    """Rolling window standard deviation. NaN at the first cycle becomes 0."""
     return s.rolling(window, min_periods=1).std().fillna(0.0)
 
 
@@ -38,7 +38,7 @@ def rolling_slope(s: pd.Series, window: int) -> pd.Series:
     """Rolling least-squares slope. Positive = value is trending up.
 
     A drifting sensor produces a persistent nonzero slope well before its
-    absolute value looks abnormal — useful for onset detection.
+    absolute value looks abnormal, which is useful for onset detection.
     """
     def _slope(y: np.ndarray) -> float:
         if len(y) < 2:
@@ -48,8 +48,10 @@ def rolling_slope(s: pd.Series, window: int) -> pd.Series:
     return s.rolling(window, min_periods=1).apply(_slope, raw=True)
 
 
-def deviation_from_baseline(s: pd.Series, baseline_cycles: int = 30) -> pd.Series:
-    """(current value) − (mean of the first N cycles of *this* series).
+def deviation_from_baseline(
+    s: pd.Series, baseline_cycles: int = 30,
+) -> pd.Series:
+    """(current value) - (mean of the first N cycles of this series).
 
     Baseline = "what this sensor looked like while the engine was healthy",
     so the feature reads directly as "how far has the reading drifted?".

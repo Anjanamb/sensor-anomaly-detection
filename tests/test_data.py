@@ -1,5 +1,4 @@
 """Sanity checks for the FD004 loader."""
-import pandas as pd
 import pytest
 
 from src.data import (
@@ -30,7 +29,7 @@ def test_load_rul_fd004_shape_matches_test_units():
 def test_add_rul_train_is_zero_at_failure():
     df = load_fd004("train")
     with_rul = add_rul_train(df)
-    # For each engine, the last recorded cycle is failure → RUL should be 0.
+    # For each engine, the last recorded cycle is failure, so RUL is 0.
     last_cycles = with_rul.sort_values("cycle").groupby("unit").tail(1)
     assert (last_cycles["rul"] == 0).all()
     # And RUL should never be negative.
