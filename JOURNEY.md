@@ -299,4 +299,105 @@ your hypothesis, and report the result.
 If you want to talk through any of these in more detail, I'm happy
 to walk through specific code paths during the conversation.
 [GitHub repo](https://github.com/Anjanamb/sensor-anomaly-detection)
-· [Live Streamlit demo](https://sensor-anomaly-detection-aj.streamlit.app/)
+
+---
+
+## 8. The v2 refine (2026-08-11): why less, and what I kept
+
+By early August the v1 repo was doing too much. Five detectors, four
+subsets, 184 features, a Streamlit dashboard, seven notebooks totalling
+~11k lines. It read like a portfolio piece rather than a project someone
+could learn from. So I refined it in place, tagged the pre-refine state
+as `v1.0.0`, and rebuilt the working tree around a much narrower goal.
+
+### The five constraints
+
+I wrote them down before touching any code:
+
+1. FD004 only. It is the hardest of the four subsets. If the approach
+   works there, it generalises.
+2. Isolation Forest as the primary detector. DBSCAN as a companion
+   specifically to get the two-methods-agreeing story and the density-based
+   plots. Skip One-Class SVM and every autoencoder.
+3. Every engineered feature justified with a hypothesis, math, and a
+   validation plot. Anything I could not justify in that template was cut.
+4. Notebook-first workflow. Thin `src/` modules, heavy notebooks. The
+   notebook itself is the tutorial; nothing important should require
+   jumping to a file.
+5. No Streamlit. The dashboard added surface area without adding teaching
+   value.
+
+### What survived
+
+- The notebook-first philosophy from v1, but sharpened. The v2 notebooks
+  each open with a "What you will learn" list and close with a "Takeaways
+  for the next notebook" bridge so the flow is continuous.
+- Per-regime normalisation as the first non-obvious step. In v1 I found
+  it late; in v2 it is the first thing notebook 02 does.
+- Lead-time as the headline metric. In v1 I reported F1 because everyone
+  reports F1. In v2 I opened notebook 05 with why F1 is actively wrong for
+  this problem and why lead time matches the operational question.
+
+### What was cut
+
+- FD001, FD002, FD003 (and their trained models and RUL files).
+- One-Class SVM, feedforward autoencoder, LSTM autoencoder, Transformer
+  autoencoder, and every supporting notebook.
+- SHAP explanations and the whole `explainability.py` module. Isolation
+  Forest scores are already interpretable enough at this scope.
+- Streamlit app, Power BI dashboard, live demo URL. The notebooks with
+  baked outputs are the interface now.
+- 164 of the 184 features. Kept 20 (8 EWMA, 8 deviation, 4 slope) on the
+  8 sensors that pass the early-vs-late shift test.
+
+### Two gotchas I did not see coming
+
+1. **Dead sensors are per-regime on FD004, not global.** On FD001 (single
+   regime) a sensor is dead if its std is near zero. On FD004 the same
+   sensor may vary substantially between regimes while being constant
+   within each. My first-pass global-std threshold in notebook 02 found
+   zero dead sensors when there are actually four (s1, s5, s18, s19).
+   Switched to "max std across regimes is below the threshold" and the
+   right sensors dropped out.
+
+2. **DBSCAN is confused by feature warmup.** My rolling primitives
+   (EWMA span 15, slope window 15, deviation baseline 30 cycles) have a
+   warmup phase where the values are not on the same manifold as the rest
+   of the engine's life. Isolation Forest handled this because those
+   warmup cycles were in its training set and it learned them as normal.
+   DBSCAN treated them as low-density outliers and labelled them as
+   anomalies. First-pass result: 69 % of DBSCAN noise was in cycles 1-30,
+   the wrong direction (noise should be *late* in life, not early). Fix:
+   drop the first 30 cycles per engine before fitting DBSCAN. After the
+   fix, median RUL of noise is 12 cycles vs 109 for clustered.
+
+Both of these are the sort of thing you only find by running the pipeline
+end-to-end and looking at the outputs. The v1 architecture masked them
+because it had so many moving parts that anomalies in any single detector
+got averaged out by the ensemble comparison.
+
+### What v2 actually shows
+
+The story landed cleanly:
+
+- Isolation Forest catches all 249 training engines with a median lead
+  time of 210 cycles.
+- DBSCAN catches 90/249, mostly late (median lead 13 cycles), but with
+  much higher per-flag precision.
+- Every DBSCAN-flagged cycle was also IF-flagged. Zero disagreement in
+  the direction "DBSCAN said yes, IF said no". IF flags many cycles DBSCAN
+  does not, which is IF being more sensitive rather than wrong.
+
+Two very different detection mechanisms confirming each other on the same
+cycles is a much better answer than a single F1 leaderboard, and it took
+about a fifth of the code to get there.
+
+### The v1.0.0 tag
+
+Everything from before the refine lives at
+[`v1.0.0`](https://github.com/Anjanamb/sensor-anomaly-detection/releases/tag/v1.0.0).
+Nothing was lost; the tag is browseable on GitHub and any file recoverable
+with `git checkout v1.0.0 -- <path>`. If you're reading this JOURNEY as a
+recruiter you might want to skim v1.0.0 first (the five-detector version
+with the F1 leaderboard is the more portfolio-style artefact) and then
+come back to v2 to see how I would actually approach the problem now.
