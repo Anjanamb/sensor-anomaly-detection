@@ -84,6 +84,15 @@ sensor-anomaly-detection/
 python -m pytest tests/ -q
 ```
 
+## Running in Docker
+
+```bash
+docker build -t sensor-anomaly-detection .
+docker run --rm -p 8888:8888 -v "$(pwd)":/app sensor-anomaly-detection
+```
+
+Then open the Jupyter Lab URL printed in the terminal.
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).

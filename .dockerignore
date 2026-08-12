@@ -3,3 +3,16 @@ venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Generated ML artefacts (rebuilt inside the container)
+data/features_*.csv
+data/scores_*.csv
+data/labels_*.csv
+data/eval_*.csv
+models/FD004/
+
+# Local working notes
+CLAUDE.md
+.claude/
+NOTES.md
+nb-run.log
