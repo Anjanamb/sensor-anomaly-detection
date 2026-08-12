@@ -4,6 +4,7 @@ import pandas as pd
 
 from src.evaluate import (
     label_by_rul, first_flag_lead_time, precision_recall_at_threshold,
+    rmse, nasa_score,
 )
 
 
@@ -46,3 +47,31 @@ def test_precision_recall_all_true_positive():
     assert out["precision"] == 1.0
     assert out["recall"]    == 1.0
     assert out["tp"] == 3 and out["fp"] == 0 and out["fn"] == 0
+
+
+def test_rmse_zero_on_perfect_prediction():
+    y = np.array([10.0, 20.0, 30.0])
+    assert rmse(y, y) == 0.0
+
+
+def test_rmse_matches_hand_calculation():
+    y_true = np.array([10.0, 20.0, 30.0])
+    y_pred = np.array([12.0, 18.0, 33.0])
+    # errors 2, -2, 3; squared 4, 4, 9; mean 17/3; sqrt ~2.38
+    assert abs(rmse(y_true, y_pred) - np.sqrt(17.0 / 3.0)) < 1e-9
+
+
+def test_nasa_score_zero_on_perfect_prediction():
+    y = np.array([10.0, 20.0, 30.0])
+    assert nasa_score(y, y) == 0.0
+
+
+def test_nasa_score_penalises_late_more_than_early():
+    """Overshoot by 10 should hurt more than undershoot by 10."""
+    y_true = np.array([100.0])
+    early = nasa_score(y_true, np.array([90.0]))   # d = -10
+    late  = nasa_score(y_true, np.array([110.0]))  # d = +10
+    assert late > early
+    # Known values: early = exp(10/13)-1 ~ 1.156, late = exp(10/10)-1 ~ 1.718
+    assert abs(early - (np.exp(10.0 / 13.0) - 1.0)) < 1e-9
+    assert abs(late  - (np.exp(10.0 / 10.0) - 1.0)) < 1e-9

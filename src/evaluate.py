@@ -10,6 +10,7 @@ Requires a ``scores_df`` with columns:
 """
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 
@@ -58,3 +59,28 @@ def precision_recall_at_threshold(scores, labels, threshold: float) -> dict:
         "precision": precision, "recall": recall,
         "tp": tp, "fp": fp, "fn": fn,
     }
+
+
+def rmse(y_true, y_pred) -> float:
+    """Root mean squared error, in the same units as the target (cycles)."""
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    return float(np.sqrt(np.mean((y_pred - y_true) ** 2)))
+
+
+def nasa_score(y_true, y_pred) -> float:
+    """C-MAPSS PHM'08 asymmetric scoring function.
+
+    Penalises late predictions (prognostic overshoot) more than early ones,
+    reflecting the operational cost of missing a failure. Lower is better.
+
+        d = y_pred - y_true
+        score_i = exp(-d/13) - 1     if d <  0   (early)
+        score_i = exp( d/10) - 1     if d >= 0   (late)
+        total   = sum_i score_i
+    """
+    y_true = np.asarray(y_true, dtype=float)
+    y_pred = np.asarray(y_pred, dtype=float)
+    d = y_pred - y_true
+    per_engine = np.where(d < 0, np.exp(-d / 13.0) - 1.0, np.exp(d / 10.0) - 1.0)
+    return float(np.sum(per_engine))

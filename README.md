@@ -19,6 +19,22 @@ cost of many cycles outside the RUL <= 30 window. DBSCAN is stricter and
 fires only when its density criterion is clearly violated; when it does
 fire, Isolation Forest agreed with it on 614 out of 617 cycles (99.5%).
 
+### RUL regression on the FD004 test set (for external comparison)
+
+The same 20 features are also used as input to two regressors evaluated
+on the FD004 test set against `RUL_FD004.txt`, with RUL clipped at 125
+(Heimes 2008 convention):
+
+| Regressor     | Test RMSE | NASA Score   |
+| ------------- | --------: | -----------: |
+| Ridge         |     20.04 |        2,207 |
+| Random Forest | **16.50** |    **1,443** |
+
+Both land in the "strong deep model" band typical for FD004 in review
+articles (Vollert & Theissler 2021), without windowed inputs or
+hyperparameter search. Notebook 07 walks through the pipeline and the
+comparison with published methods.
+
 ## What's here
 
 - **FD004 only.** 249 training engines, 6 operating regimes, 2 failure
@@ -57,6 +73,7 @@ notebooks in order.
 | 04 | [`04_train_dbscan.ipynb`](notebooks/04_train_dbscan.ipynb)                  | Feature-warmup exclusion, standardise, pick min_samples and eps via k-distance plot, fit, PCA projection, compare with IF |
 | 05 | [`05_evaluate.ipynb`](notebooks/05_evaluate.ipynb)                          | Why lead time is the headline (not F1), per-detector distributions, per-engine agreement analysis                         |
 | 06 | [`06_visuals.ipynb`](notebooks/06_visuals.ipynb)                            | Four summary plots: hero score-vs-cycle grid, PCA colored by RUL, lead-time reverse CDF, per-engine detection heatmap     |
+| 07 | [`07_rul_regression.ipynb`](notebooks/07_rul_regression.ipynb)              | Ridge + Random Forest on the same 20 features, scored on the FD004 test set (RMSE + NASA Score) for external benchmark    |
 
 ## Repository layout
 
